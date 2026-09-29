@@ -1,0 +1,7 @@
+langgraph
+langgraph-checkpoint-sqlite
+langchain
+langchain-openai        # or langchain-anthropic / langchain-google-genai, whichever provider you use
+pydantic
+pypdf
+python-dotenv
