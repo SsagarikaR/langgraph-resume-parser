@@ -2,13 +2,13 @@ from pathlib import Path
 from app.graph.state import ResumeState
 from app.tools.pdf_tools import extract_text_from_pdf
 
-def validate_input(state -> ResumeState) -> dict
-  path = state.get("resume path", "")
+def validate_input(state: ResumeState) -> dict:
+  path = state.get("resume_path", "")
   if not path or not Path(path).exists():
     raise ValueError(f"Resume file not found: {path}")
   if not path.lower().endswith(".pdf"):
     raise ValueError(f"Resume must be a pdf")
-  if len(state.get("job_description", "").strip()) < 50
+  if len(state.get("job_description", "").strip()) < 50:
     raise ValueError(f"Job description is missing or too short")
   return {"steps": ["validate_input"]}
 
