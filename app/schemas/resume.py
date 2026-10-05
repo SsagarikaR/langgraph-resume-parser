@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-class Expereince(BaseModel):
+class Experience(BaseModel):
     title: str
     company: str
     duration_months: int | None = Field(
@@ -22,6 +22,6 @@ class ResumeProfile(BaseModel):
     name : str
     email: str | None = None
     skills: list[str] = Field(description="All technical skills, language, frameworks, database and tools")
-    experience: list[Expereince] = Field(default_factory=list)
-    project: list[Project] = Field(default_factory=list)
+    experience: list[Experience] = Field(default_factory=list)
+    projects: list[Project] = Field(default_factory=list)
     education: list[Education] = Field(default_factory=list)

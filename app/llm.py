@@ -1,7 +1,12 @@
 import os
-from dotenv import loadenv
+from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 
-loadenv()
+load_dotenv()
 
-llm = init_chat_model(os.getenv("MODEL","openai:gpt-4o-mini"), temperature=0)
+llm = init_chat_model(
+    os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+    model_provider="google_genai",
+    api_key=os.getenv("GEMINI_API_KEY"),
+    temperature=0,
+)
