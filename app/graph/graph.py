@@ -6,9 +6,13 @@ builder = StateGraph(ResumeState)
 
 builder.add_node("validate_input", validate_input)
 builder.add_node("parse_resume", parse_resume)
+builder.add_node("extract_resume", extract_resume)
+builder.add_node("analyze_resume", analyze_resume)
 
 builder.add_edge(START, "validate_input")
 builder.add_edge("validate_input", "parse_resume")
-builder.add_edge("parse_resume", END)
+builder.add_edge("parse_resume", "extract_resume")
+builder.add_edge("extract_resume", "analyze_resume")
+builder.add_edge("analyze_resume", END)
 
 graph = builder.compile()
