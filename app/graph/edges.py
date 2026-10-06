@@ -5,7 +5,7 @@ MATCH_THRESHOLD = 70
 MAX_REVISIONS = 3
 
 def route_after_matching(state: ResumeState) -> Literal["strong_match", "weak_match"]:
-    if state["match_percentage"] >= MATCH_THRESHOLD and state["experience_gap_years"] == 0:
+    if state["match_percentage"] >= MATCH_THRESHOLD and state["experience_gap_years"] <= 0.5:
         return "strong_match"
     return "weak_match"
 
