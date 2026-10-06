@@ -11,7 +11,7 @@ from app.graph.state import ResumeState
 from app.tools.pdf_tools import extract_text_from_pdf
 from app.schemas.analysis import GapAnalysis
 from app.schemas.analysis import InterviewQuestionSet
-from app.tools.knowledge_tools import lookup_interview_guideline
+from app.tools.knowledge_tools import lookup_interview_guideline, available_topics
 
 TOOLS = {"lookup_interview_guideline": lookup_interview_guideline}
 resume_extractor = llm.with_structured_output(ResumeProfile)
@@ -177,10 +177,18 @@ def generate_questions(state: ResumeState) -> dict:
         "gap_analysis": state.get("gap_analysis"),   # may be None on strong-match path
     }
 
+    # Look up company guidelines once; revisions reuse them from state
+    guidelines = state.get("interview_guidelines")
+    if guidelines is None:
+        topics = [state["job"]["job_title"], *state["matching_skills"], *state["missing_skills"]]
+        guidelines = gather_guidelines(topics)
+    context["company_interview_guidelines"] = guidelines or "None found"
+
     instructions = (
         "Generate 12-15 interview questions for this candidate. Mix: questions that verify "
         "claimed strengths, questions that probe gaps, questions about their specific "
-        "projects, and 2 behavioral questions."
+        "projects, and 2 behavioral questions. Follow the company interview guidelines: "
+        "focus on the areas they list and use their red flags to shape follow-up questions."
     )
     if state.get("review_feedback"):
         instructions += f"\n\nA reviewer rejected the previous set. Their feedback: {state['review_feedback']}"
@@ -191,6 +199,7 @@ def generate_questions(state: ResumeState) -> dict:
     ])
     return {
         "interview_questions": [q.model_dump() for q in result.questions],
+        "interview_guidelines": guidelines,
         "steps": ["generate_questions"],
     }
 
@@ -202,22 +211,29 @@ def _text(content) -> str:
 
 
 def gather_guidelines(topics: list[str]) -> str:
+    """Let the LLM look up company guidelines with the knowledge base tool and summarise them."""
     llm_with_tools = llm.bind_tools(list(TOOLS.values()))
     messages = [
         SystemMessage("You are preparing to write interview questions. Look up company "
-                      "guidelines for the topics that matter most. When finished, reply "
-                      "with a short summary of the focus areas you found."),
-        HumanMessage(f"Topics: {', '.join(topics)}"),
+                      "guidelines for every available topic relevant to this role. "
+                      f"Available topics: {', '.join(available_topics())}. When finished, reply "
+                      "with a short summary of the focus areas and red flags you found, "
+                      "grouped by topic."),
+        HumanMessage(f"Role and candidate skills: {', '.join(topics)}"),
     ]
+    found = []                                 # raw guideline texts, used if no summary comes back
     for _ in range(5):                         # safety limit on loop iterations
         ai = llm_with_tools.invoke(messages)
         messages.append(ai)
         if not ai.tool_calls:                  # LLM is done using tools
-            return _text(ai.content)
+            return _text(ai.content) or "\n\n".join(found)
         for call in ai.tool_calls:
-            output = TOOLS[call["name"]].invoke(call["args"])
+            tool_fn = TOOLS.get(call["name"])
+            output = tool_fn.invoke(call["args"]) if tool_fn else f"Unknown tool: {call['name']}"
+            if not output.startswith(("No guideline", "Unknown tool")):
+                found.append(output)
             messages.append(ToolMessage(content=output, tool_call_id=call["id"]))
-    return ""
+    return "\n\n".join(found)
 
 def human_review(state: ResumeState) -> dict:
     decision = interrupt({
@@ -256,6 +272,7 @@ def generate_report(state: ResumeState) -> dict:
         },
         "projects": state["resume"]["projects"],
         "gap_analysis": state.get("gap_analysis"),
+        "interview_guidelines": state.get("interview_guidelines"),
         "interview_questions": state["interview_questions"],
         "approved_by_human": state.get("approved", False),
         "revisions": state.get("revision_count", 0),
