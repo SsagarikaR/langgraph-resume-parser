@@ -5,3 +5,8 @@ langchain-google-genai
 pydantic
 pypdf
 python-dotenv
+fastapi
+uvicorn
+python-multipart
+streamlit
+requests
