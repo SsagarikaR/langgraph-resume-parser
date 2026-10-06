@@ -1,6 +1,7 @@
 import json
+import re
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 from app.llm import llm
 from langgraph.types import interrupt
 from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
@@ -11,7 +12,6 @@ from app.tools.pdf_tools import extract_text_from_pdf
 from app.schemas.analysis import GapAnalysis
 from app.schemas.analysis import InterviewQuestionSet
 from app.tools.knowledge_tools import lookup_interview_guideline
-
 
 TOOLS = {"lookup_interview_guideline": lookup_interview_guideline}
 resume_extractor = llm.with_structured_output(ResumeProfile)
@@ -36,18 +36,48 @@ def parse_resume(state: ResumeState) -> dict:
         raise ValueError("No text extracted. The PDF may be scanned and need OCR")
     return {"resume_text": text, "steps": ["parse_resume"]}
 
+def _month_index(value: str | None) -> int | None:
+    # "2023-07" -> months since year 0; tolerates "2023" or "2023-7"
+    m = re.match(r"\s*(\d{4})(?:-(\d{1,2}))?", value or "")
+    if not m:
+        return None
+    return int(m.group(1)) * 12 + int(m.group(2) or 1) - 1
+
+
+def _role_months(role: dict, today: int) -> set[int]:
+    start = _month_index(role.get("start_date"))
+    end = today if role.get("is_current") else _month_index(role.get("end_date"))
+    if start is None or end is None or end < start:
+        return set()
+    return set(range(start, end + 1))          # inclusive: Jul-Jul counts as 1 month
+
+
 def extract_resume(state: ResumeState) -> dict:
   profile = resume_extractor.invoke([
     ("system", "Extract structured data from the resume. Use only information present "
-                   "in the text. Never invent skills, dates or projects."),
+                   "in the text. Never invent skills, dates or projects. Copy dates exactly "
+                   "as YYYY-MM; do not calculate durations. List each skill as a short "
+                   "canonical name, splitting groups like 'AWS (EC2, S3)' into separate skills."),
     ("human", state["resume_text"])
   ])
-  return {"resume": profile.model_dump(), "steps": ["extract_resume"]}
+  resume = profile.model_dump()
+
+  # Durations are computed here, not by the LLM, so they are correct and repeatable
+  today = date.today().year * 12 + date.today().month - 1
+  all_months: set[int] = set()
+  for role in resume["experience"]:
+    months = _role_months(role, today)
+    role["duration_months"] = len(months) or None
+    all_months |= months
+  resume["total_experience_months"] = len(all_months)   # overlapping roles counted once
+  return {"resume": resume, "steps": ["extract_resume"]}
 
 def analyze_job(state: ResumeState) -> dict:
   job = job_extractor.invoke([
     ("system", "Extract structured requirements from the job description. Use only "
-                   "information present in the text. Never invent skills or requirements."),
+                   "information present in the text. Never invent skills or requirements. "
+                   "Use short canonical skill names, and keep alternatives such as "
+                   "'Kafka or RabbitMQ' as a single required skill."),
     ("human", state["job_description"])
   ])
   return {"job": job.model_dump(), "steps": ["analyze_job"]}
@@ -61,29 +91,53 @@ ALIASES = {
     "ts": "typescript",
     "k8s": "kubernetes",
     "retrieval augmented generation": "rag",
+    "amazon web services": "aws",
+    "golang": "go",
+    "rest": "rest api",
+    "rest apis": "rest api",
+    "restful apis": "rest api",
+    "rest api design": "rest api",
+    "github actions": "ci/cd",
+    "gitlab ci": "ci/cd",
+    "jenkins": "ci/cd",
+    "ci/cd pipelines": "ci/cd",
 }
 
 
 def normalize(skill: str) -> str:
-    s = skill.strip().lower()
+    s = " ".join(skill.lower().split())
     return ALIASES.get(s, s)
+
+
+def skill_variants(skill: str) -> set[str]:
+    main, _, inner = skill.partition("(")
+    parts = [main, *inner.rstrip(")").split(",")]
+    return {normalize(p) for p in parts if p.strip()}
+
+
+def is_met(required: str, candidate_skills: set[str]) -> bool:
+    # "Kafka or RabbitMQ" is met by either one
+    alternatives = re.split(r"\s+or\s+", required, flags=re.IGNORECASE)
+    return any(skill_variants(alt) & candidate_skills for alt in alternatives)
 
 
 def match_requirements(state: ResumeState) -> dict:
     resume, job = state["resume"], state["job"]
 
     # Skills from the skills section AND from project tech stacks
-    candidate_skills = {normalize(s) for s in resume["skills"]}
+    candidate_skills: set[str] = set()
+    for s in resume["skills"]:
+        candidate_skills |= skill_variants(s)
     for project in resume["projects"]:
-        candidate_skills |= {normalize(t) for t in project["technologies"]}
+        for t in project["technologies"]:
+            candidate_skills |= skill_variants(t)
 
     required = job["required_skills"]
-    matching = [s for s in required if normalize(s) in candidate_skills]
-    missing = [s for s in required if normalize(s) not in candidate_skills]
+    matching = [s for s in required if is_met(s, candidate_skills)]
+    missing = [s for s in required if not is_met(s, candidate_skills)]
     pct = round(100 * len(matching) / len(required), 1) if required else 100.0
 
-    months = sum(e["duration_months"] or 0 for e in resume["experience"])
-    years = round(months / 12, 1)
+    years = round(resume.get("total_experience_months", 0) / 12, 1)
     gap = max(0.0, (job.get("required_experience_years") or 0) - years)
 
     return {
