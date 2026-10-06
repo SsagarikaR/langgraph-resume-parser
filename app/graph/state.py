@@ -18,6 +18,7 @@ class ResumeState(TypedDict, total=False):
     experience_gap_years: float
 
     gap_analysis: dict
+    interview_guidelines: str
     interview_questions: list[dict]
 
     approved: bool
