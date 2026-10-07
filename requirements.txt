@@ -10,3 +10,4 @@ uvicorn
 python-multipart
 streamlit
 requests
+qdrant-client

@@ -11,7 +11,7 @@ from app.graph.state import ResumeState
 from app.tools.pdf_tools import extract_text_from_pdf
 from app.schemas.analysis import GapAnalysis
 from app.schemas.analysis import InterviewQuestionSet
-from app.tools.knowledge_tools import lookup_interview_guideline, available_topics
+from app.tools.knowledge_tools import lookup_interview_guideline, NO_RESULTS
 
 TOOLS = {"lookup_interview_guideline": lookup_interview_guideline}
 resume_extractor = llm.with_structured_output(ResumeProfile)
@@ -185,13 +185,17 @@ def generate_questions(state: ResumeState) -> dict:
     context["company_interview_guidelines"] = guidelines or "None found"
 
     instructions = (
-        "Generate 12-15 interview questions for this candidate. Mix: questions that verify "
-        "claimed strengths, questions that probe gaps, questions about their specific "
-        "projects, and 2 behavioral questions. Follow the company interview guidelines: "
-        "focus on the areas they list and use their red flags to shape follow-up questions."
+        "Generate interview questions for this candidate. By default write 12-15 questions. "
+        "Mix: questions that verify claimed strengths, questions that probe gaps, questions "
+        "about their specific projects, and 2 behavioral questions. Follow the company interview "
+        "guidelines: focus on the areas they list and use their red flags to shape follow-up questions."
     )
     if state.get("review_feedback"):
-        instructions += f"\n\nA reviewer rejected the previous set. Their feedback: {state['review_feedback']}"
+        instructions += (
+            "\n\nA reviewer rejected the previous set. Their feedback below takes priority over "
+            "the defaults above, including the number and mix of questions. If they ask for a "
+            f"specific number of questions, return exactly that many.\n\nFeedback: {state['review_feedback']}"
+        )
 
     result = question_generator.invoke([
         ("system", instructions),
@@ -214,11 +218,11 @@ def gather_guidelines(topics: list[str]) -> str:
     """Let the LLM look up company guidelines with the knowledge base tool and summarise them."""
     llm_with_tools = llm.bind_tools(list(TOOLS.values()))
     messages = [
-        SystemMessage("You are preparing to write interview questions. Look up company "
-                      "guidelines for every available topic relevant to this role. "
-                      f"Available topics: {', '.join(available_topics())}. When finished, reply "
-                      "with a short summary of the focus areas and red flags you found, "
-                      "grouped by topic."),
+        SystemMessage("You are preparing to write interview questions. Search the company "
+                      "interview guidelines for the skills and areas that matter most for this "
+                      "role, one search per skill or area (including the candidate's missing "
+                      "skills). When finished, reply with a short summary of the focus areas "
+                      "and red flags you found, grouped by topic."),
         HumanMessage(f"Role and candidate skills: {', '.join(topics)}"),
     ]
     found = []                                 # raw guideline texts, used if no summary comes back
@@ -230,7 +234,7 @@ def gather_guidelines(topics: list[str]) -> str:
         for call in ai.tool_calls:
             tool_fn = TOOLS.get(call["name"])
             output = tool_fn.invoke(call["args"]) if tool_fn else f"Unknown tool: {call['name']}"
-            if not output.startswith(("No guideline", "Unknown tool")):
+            if not output.startswith((NO_RESULTS, "Unknown tool")):
                 found.append(output)
             messages.append(ToolMessage(content=output, tool_call_id=call["id"]))
     return "\n\n".join(found)

@@ -1,3 +1,7 @@
 .venv
 .env
 __pycache__
+checkpoints.db*
+reports/
+data/uploads/
+qdrant_data/
