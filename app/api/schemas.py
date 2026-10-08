@@ -1,11 +1,17 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 
 class ReviewRequest(BaseModel):
     action: Literal["approve", "revise"]
-    feedback: str = ""
+    feedback: str = Field("", max_length=2000)
+
+    @model_validator(mode="after")
+    def _revise_needs_feedback(self):
+        if self.action == "revise" and not self.feedback.strip():
+            raise ValueError("feedback is required when action is 'revise'")
+        return self
 
 
 class ContinueRequest(BaseModel):
