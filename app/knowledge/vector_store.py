@@ -7,38 +7,42 @@ the closest chunks, so "Kafka" also finds the system-design guideline about even
 Qdrant runs in local mode (data in ./qdrant_data) unless QDRANT_URL points at a server.
 """
 import atexit
-import os
+import logging
 import uuid
 from functools import lru_cache
 from pathlib import Path
 
-from dotenv import load_dotenv
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-load_dotenv()
+from app.core.config import get_settings
 
-KB_DIR = Path("data/knowledge_base")
+logger = logging.getLogger(__name__)
+
 COLLECTION = "interview_guidelines"
 TOP_K = 4
-MIN_SCORE = 0.6         
+MIN_SCORE = 0.6
+
 
 @lru_cache
 def get_client() -> QdrantClient:
-    if url := os.getenv("QDRANT_URL"):
-        client = QdrantClient(url=url, api_key=os.getenv("QDRANT_API_KEY"))
+    settings = get_settings()
+    if settings.qdrant_url:
+        api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
+        client = QdrantClient(url=settings.qdrant_url, api_key=api_key)
     else:
-        client = QdrantClient(path=os.getenv("QDRANT_PATH", "qdrant_data"))
-    atexit.register(client.close)     
+        client = QdrantClient(path=str(settings.qdrant_path))
+    atexit.register(client.close)
     return client
 
 
 @lru_cache
 def get_embeddings() -> GoogleGenerativeAIEmbeddings:
+    settings = get_settings()
     return GoogleGenerativeAIEmbeddings(
-        model=os.getenv("EMBEDDING_MODEL", "gemini-embedding-001"),
-        google_api_key=os.getenv("GEMINI_API_KEY"),
+        model=settings.embedding_model,
+        google_api_key=settings.gemini_api_key.get_secret_value(),
     )
 
 
@@ -69,8 +73,9 @@ def chunk_markdown(path: Path) -> list[dict]:
     return chunks
 
 
-def ingest(kb_dir: Path = KB_DIR) -> int:
+def ingest(kb_dir: Path | None = None) -> int:
     """(Re)build the collection from the markdown files. Returns the number of chunks stored."""
+    kb_dir = kb_dir or get_settings().knowledge_base_dir
     chunks = [c for path in sorted(kb_dir.glob("*.md")) for c in chunk_markdown(path)]
     if not chunks:
         raise ValueError(f"No guideline files found in {kb_dir}")
@@ -90,11 +95,16 @@ def ingest(kb_dir: Path = KB_DIR) -> int:
         )
         for i, (c, vector) in enumerate(zip(chunks, vectors))
     ])
+    logger.info("Indexed %d guideline chunks from %s", len(chunks), kb_dir)
     return len(chunks)
 
 
+@lru_cache
 def ensure_index() -> None:
-    """Build the collection on first use so the app works without a manual ingest step."""
+    """Build the collection on first use so the app works without a manual ingest step.
+
+    Cached, so the existence check runs once per process instead of on every search.
+    """
     client = get_client()
     if not client.collection_exists(COLLECTION) or client.count(COLLECTION).count == 0:
         ingest()
