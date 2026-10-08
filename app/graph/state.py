@@ -28,4 +28,7 @@ class ResumeState(TypedDict, total=False):
     final_report: dict
     report_path: str
 
+    # Static breakpoints chosen for this run (node names to pause after)
+    breakpoints: list[str]
+
     steps: Annotated[list[str], operator.add]

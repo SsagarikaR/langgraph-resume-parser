@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes.screenings import router as screenings_router
 from app.services.exceptions import (
-    InvalidScreeningInput, NotAwaitingReview, ScreeningError, ScreeningNotFound, WorkflowFailed,
+    InvalidScreeningInput, NotAwaitingReview, NotPaused, ScreeningError, ScreeningNotFound, WorkflowFailed,
 )
 
 app = FastAPI(title="Resume Screening API")
@@ -14,6 +14,7 @@ STATUS_CODES = {
     InvalidScreeningInput: 400,
     ScreeningNotFound: 404,
     NotAwaitingReview: 409,
+    NotPaused: 409,
     WorkflowFailed: 500,
 }
 

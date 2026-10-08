@@ -24,6 +24,10 @@ class ScreeningRepository:
     def get_state(self, thread_id: str) -> StateSnapshot:
         return graph.get_state(config_for(thread_id))
 
+    def update_state(self, thread_id: str, values: dict, as_node: str) -> None:
+        """Write values into a paused thread as if `as_node` had produced them."""
+        graph.update_state(config_for(thread_id), values, as_node=as_node)
+
     def save_upload(self, thread_id: str, kind: str, data: bytes, suffix: str) -> Path:
         """Save an uploaded file as data/uploads/<thread_id>_<kind><suffix>."""
         self.uploads_dir.mkdir(parents=True, exist_ok=True)

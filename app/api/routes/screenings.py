@@ -2,7 +2,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from app.api.schemas import ReviewRequest, ScreeningResponse
+from app.api.schemas import ContinueRequest, ReviewRequest, ScreeningResponse
 from app.repositories.screening_repository import ScreeningRepository
 from app.services.screening_service import ScreeningService
 
@@ -20,15 +20,17 @@ def start_screening(
     resume: UploadFile = File(..., description="Resume PDF"),
     jd_text: str | None = Form(None),
     jd_file: UploadFile | None = File(None),
+    breakpoints: list[str] = Form([], description="Nodes to pause after, e.g. match_requirements"),
     service: ScreeningService = Depends(get_service),
 ):
-    """Upload a resume and JD; runs the workflow until it pauses for human review."""
+    """Upload a resume and JD; runs the workflow until it pauses for review or at a breakpoint."""
     return service.start(
         resume_filename=resume.filename or "",
         resume_bytes=resume.file.read(),
         jd_text=jd_text,
         jd_filename=jd_file.filename if jd_file else None,
         jd_bytes=jd_file.file.read() if jd_file else None,
+        breakpoints=breakpoints,
     )
 
 
@@ -43,3 +45,11 @@ def review_screening(
 ):
     """Approve the questions or send them back with feedback."""
     return service.review(thread_id, review.action, review.feedback)
+
+
+@router.post("/{thread_id}/continue", response_model=ScreeningResponse)
+def continue_screening(
+    thread_id: str, body: ContinueRequest, service: ScreeningService = Depends(get_service)
+):
+    """Resume a screening paused at a breakpoint, optionally correcting the skill match."""
+    return service.continue_run(thread_id, body.matching_skills)

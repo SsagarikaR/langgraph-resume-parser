@@ -14,5 +14,9 @@ class NotAwaitingReview(ScreeningError):
     pass
 
 
+class NotPaused(ScreeningError):
+    pass
+
+
 class WorkflowFailed(ScreeningError):
     pass
