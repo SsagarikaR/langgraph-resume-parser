@@ -1,9 +1,10 @@
+import logging
 import uuid
 
 from langgraph.types import Command, StateSnapshot
 
-from app.graph.graph import graph
-from app.repositories.screening_repository import ScreeningRepository, config_for
+from app.graph.errors import InvalidInputError
+from app.repositories.screening_repository import ScreeningRepository
 from app.services.exceptions import (
     InvalidScreeningInput, NotAwaitingReview, NotPaused, ScreeningNotFound, WorkflowFailed,
 )
@@ -11,6 +12,9 @@ from app.tools.pdf_tools import extract_text_from_pdf
 
 # Nodes a run may pause after (static breakpoints, i.e. LangGraph's interrupt_after)
 BREAKPOINT_NODES = ("match_requirements", "analyze_gaps", "generate_questions")
+PDF_MAGIC = b"%PDF-"
+
+logger = logging.getLogger(__name__)
 
 
 class ScreeningService:
@@ -30,7 +34,7 @@ class ScreeningService:
         breakpoints: list[str] | None = None,
     ) -> dict:
         """Run the workflow until it pauses for human review, hits a breakpoint, or fails."""
-        if not resume_filename.lower().endswith(".pdf"):
+        if not resume_filename.lower().endswith(".pdf") or not resume_bytes.startswith(PDF_MAGIC):
             raise InvalidScreeningInput("Resume must be a PDF")
         breakpoints = list(dict.fromkeys(breakpoints or []))
         unknown = set(breakpoints) - set(BREAKPOINT_NODES)
@@ -40,6 +44,7 @@ class ScreeningService:
             )
 
         thread_id = uuid.uuid4().hex[:12]
+        logger.info("Starting screening %s (breakpoints=%s)", thread_id, breakpoints)
         resume_path = self.repository.save_upload(thread_id, "resume", resume_bytes, ".pdf")
         job_description = self._read_job_description(thread_id, jd_text, jd_filename, jd_bytes)
 
@@ -99,11 +104,15 @@ class ScreeningService:
     def _run(self, graph_input, thread_id: str, breakpoints: list[str]) -> dict:
         try:
             # Static breakpoints apply per invoke call, so they are passed on every resume
-            graph.invoke(graph_input, config_for(thread_id), interrupt_after=breakpoints or None)
-        except ValueError as e:          # input problems raised by validate_input / parse_resume
+            self.repository.run(graph_input, thread_id, interrupt_after=breakpoints)
+        except InvalidInputError as e:   # input problems raised by validate_input / parse_resume
             raise InvalidScreeningInput(str(e)) from e
         except Exception as e:
-            raise WorkflowFailed(f"{type(e).__name__}: {e}") from e
+            # Full details go to the log; the client gets no internals (provider errors, paths)
+            logger.exception("Screening %s failed", thread_id)
+            raise WorkflowFailed(
+                f"Screening {thread_id} failed ({type(e).__name__}). See server logs for details."
+            ) from e
         return self.get(thread_id)
 
     def _read_job_description(
@@ -114,9 +123,14 @@ class ScreeningService:
         if jd_bytes is None:
             raise InvalidScreeningInput("Provide the job description as text or as a .txt/.pdf file")
         if (jd_filename or "").lower().endswith(".pdf"):
+            if not jd_bytes.startswith(PDF_MAGIC):
+                raise InvalidScreeningInput("Job description file is not a valid PDF")
             path = self.repository.save_upload(thread_id, "jd", jd_bytes, ".pdf")
             return extract_text_from_pdf(path)
-        return jd_bytes.decode("utf-8", errors="ignore")
+        try:
+            return jd_bytes.decode("utf-8")
+        except UnicodeDecodeError as e:
+            raise InvalidScreeningInput("Job description file must be UTF-8 text or a PDF") from e
 
     @staticmethod
     def _to_view(thread_id: str, snapshot: StateSnapshot) -> dict:

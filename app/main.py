@@ -1,12 +1,17 @@
+"""Command-line runner for the screening workflow.
+
+    python -m app.main start <thread_id> <resume.pdf> <jd.txt>
+    python -m app.main review <thread_id>
+"""
+import argparse
 import json
-import sys
 from pathlib import Path
+
 from langgraph.types import Command
-from app.graph.graph import graph
 
-
-def config_for(thread_id: str) -> dict:
-    return {"configurable": {"thread_id": thread_id}}
+from app.core.logging import setup_logging
+from app.graph.graph import get_graph
+from app.repositories.screening_repository import config_for
 
 
 def show_result(result: dict):
@@ -21,7 +26,7 @@ def show_result(result: dict):
 
 
 def start(thread_id: str, resume_path: str, jd_path: str):
-    result = graph.invoke(
+    result = get_graph().invoke(
         {"resume_path": resume_path, "job_description": Path(jd_path).read_text()},
         config_for(thread_id),
     )
@@ -29,6 +34,7 @@ def start(thread_id: str, resume_path: str, jd_path: str):
 
 
 def review(thread_id: str):
+    graph = get_graph()
     config = config_for(thread_id)
     snapshot = graph.get_state(config)
     if not snapshot.next:
@@ -48,9 +54,25 @@ def review(thread_id: str):
     show_result(result)
 
 
+def main():
+    parser = argparse.ArgumentParser(description="Resume screening workflow")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    start_cmd = commands.add_parser("start", help="Start a new screening")
+    start_cmd.add_argument("thread_id")
+    start_cmd.add_argument("resume_path", help="Resume PDF")
+    start_cmd.add_argument("jd_path", help="Job description text file")
+
+    review_cmd = commands.add_parser("review", help="Review a screening paused for approval")
+    review_cmd.add_argument("thread_id")
+
+    args = parser.parse_args()
+    setup_logging()
+    if args.command == "start":
+        start(args.thread_id, args.resume_path, args.jd_path)
+    else:
+        review(args.thread_id)
+
+
 if __name__ == "__main__":
-    cmd = sys.argv[1]
-    if cmd == "start":
-        start(sys.argv[2], sys.argv[3], sys.argv[4])
-    elif cmd == "review":
-        review(sys.argv[2])
+    main()

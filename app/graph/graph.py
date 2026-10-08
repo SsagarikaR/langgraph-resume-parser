@@ -1,7 +1,11 @@
 import sqlite3
+from functools import lru_cache
+from pathlib import Path
+
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite import SqliteSaver
 
+from app.core.config import get_settings
 from app.graph.state import ResumeState
 from app.graph.nodes import (
     validate_input, parse_resume, extract_resume, analyze_job,
@@ -11,7 +15,7 @@ from app.graph.nodes import (
 from app.graph.edges import route_after_matching, route_after_review
 
 
-def build_graph(db_path: str = "checkpoints.db"):
+def build_graph(db_path: Path | str):
     builder = StateGraph(ResumeState)
 
     builder.add_node("validate_input", validate_input)
@@ -47,4 +51,7 @@ def build_graph(db_path: str = "checkpoints.db"):
     return builder.compile(checkpointer=SqliteSaver(conn))
 
 
-graph = build_graph()
+@lru_cache
+def get_graph():
+    """The compiled graph, built on first use (not at import) with the configured checkpoint DB."""
+    return build_graph(get_settings().checkpoint_db)
