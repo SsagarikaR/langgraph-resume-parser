@@ -1,13 +1,17 @@
-langgraph
-langgraph-checkpoint-sqlite
-langchain
-langchain-google-genai
-pydantic
-pypdf
-python-dotenv
-fastapi
-uvicorn
-python-multipart
-streamlit
-requests
-qdrant-client
+# Runtime dependencies (versions tested together; bump deliberately)
+langgraph~=1.2.12
+langgraph-checkpoint-sqlite~=3.1.1
+langchain~=1.4.3
+langchain-core~=1.6.5
+langchain-google-genai~=4.4.0
+pydantic~=2.13.5
+pydantic-settings~=2.15.0
+pypdf~=6.19.0
+fastapi~=0.142.2
+uvicorn~=0.54.0
+python-multipart~=0.0.32
+qdrant-client~=1.19.1
+
+# UI
+streamlit~=1.65.0
+requests~=2.34.2

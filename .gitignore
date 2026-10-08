@@ -1,6 +1,8 @@
 .venv
 .env
-__pycache__
+__pycache__/
+*.pyc
+.pytest_cache/
 checkpoints.db*
 reports/
 data/uploads/
