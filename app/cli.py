@@ -1,8 +1,9 @@
 """Command-line runner for the screening workflow.
 
-    python -m app.main start <thread_id> <resume.pdf> <jd.txt>
-    python -m app.main review <thread_id>
+python -m app.cli start <thread_id> <resume.pdf> <jd.txt>
+python -m app.cli review <thread_id>
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -14,18 +15,18 @@ from app.graph.graph import get_graph
 from app.repositories.screening_repository import config_for
 
 
-def show_result(result: dict):
+def show_result(result: dict) -> None:
     if "__interrupt__" in result:
         payload = result["__interrupt__"][0].value
-        print("\n⏸  Paused for human review:\n")
+        print("\n  Paused for human review:\n")
         print(json.dumps(payload, indent=2))
-        print("\nResume with:  python -m app.main review <thread_id>")
+        print("\nResume with:  python -m app.cli review <thread_id>")
     else:
-        print(f"\n✅ Done. Path taken: {result['steps']}")
+        print(f"\n Done. Path taken: {result['steps']}")
         print(f"Report saved to: {result['report_path']}")
 
 
-def start(thread_id: str, resume_path: str, jd_path: str):
+def start(thread_id: str, resume_path: str, jd_path: str) -> None:
     result = get_graph().invoke(
         {"resume_path": resume_path, "job_description": Path(jd_path).read_text()},
         config_for(thread_id),
@@ -33,7 +34,7 @@ def start(thread_id: str, resume_path: str, jd_path: str):
     show_result(result)
 
 
-def review(thread_id: str):
+def review(thread_id: str) -> None:
     graph = get_graph()
     config = config_for(thread_id)
     snapshot = graph.get_state(config)
@@ -54,7 +55,7 @@ def review(thread_id: str):
     show_result(result)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Resume screening workflow")
     commands = parser.add_subparsers(dest="command", required=True)
 

@@ -2,21 +2,21 @@ class ScreeningError(Exception):
     """Base class for errors the service raises. The API layer maps each to an HTTP status."""
 
 
-class ScreeningNotFound(ScreeningError):
+class ScreeningNotFoundError(ScreeningError):
     pass
 
 
-class InvalidScreeningInput(ScreeningError):
+class InvalidScreeningInputError(ScreeningError):
     pass
 
 
-class NotAwaitingReview(ScreeningError):
+class NotAwaitingReviewError(ScreeningError):
     pass
 
 
-class NotPaused(ScreeningError):
+class NotPausedError(ScreeningError):
     pass
 
 
-class WorkflowFailed(ScreeningError):
+class WorkflowFailedError(ScreeningError):
     pass

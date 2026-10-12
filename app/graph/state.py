@@ -1,5 +1,5 @@
 import operator
-from typing import TypedDict, Annotated
+from typing import Annotated, TypedDict
 
 
 class ResumeState(TypedDict, total=False):

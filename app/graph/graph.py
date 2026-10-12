@@ -2,20 +2,27 @@ import sqlite3
 from functools import lru_cache
 from pathlib import Path
 
-from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from app.core.config import get_settings
-from app.graph.state import ResumeState
-from app.graph.nodes import (
-    validate_input, parse_resume, extract_resume, analyze_job,
-    match_requirements, analyze_gaps, generate_questions,
-    human_review, generate_report,
-)
 from app.graph.edges import route_after_matching, route_after_review
+from app.graph.nodes import (
+    analyze_gaps,
+    analyze_job,
+    extract_resume,
+    generate_questions,
+    generate_report,
+    human_review,
+    match_requirements,
+    parse_resume,
+    validate_input,
+)
+from app.graph.state import ResumeState
 
 
-def build_graph(db_path: Path | str):
+def build_graph(db_path: Path | str) -> CompiledStateGraph:
     builder = StateGraph(ResumeState)
 
     builder.add_node("validate_input", validate_input)
@@ -35,14 +42,16 @@ def build_graph(db_path: Path | str):
     builder.add_edge("analyze_job", "match_requirements")
 
     builder.add_conditional_edges(
-        "match_requirements", route_after_matching,
+        "match_requirements",
+        route_after_matching,
         {"strong_match": "generate_questions", "weak_match": "analyze_gaps"},
     )
     builder.add_edge("analyze_gaps", "generate_questions")
     builder.add_edge("generate_questions", "human_review")
 
     builder.add_conditional_edges(
-        "human_review", route_after_review,
+        "human_review",
+        route_after_review,
         {"approved": "generate_report", "revise": "generate_questions"},
     )
     builder.add_edge("generate_report", END)
@@ -52,6 +61,6 @@ def build_graph(db_path: Path | str):
 
 
 @lru_cache
-def get_graph():
+def get_graph() -> CompiledStateGraph:
     """The compiled graph, built on first use (not at import) with the configured checkpoint DB."""
     return build_graph(get_settings().checkpoint_db)

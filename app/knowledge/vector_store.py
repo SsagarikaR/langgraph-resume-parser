@@ -6,6 +6,7 @@ the closest chunks, so "Kafka" also finds the system-design guideline about even
 
 Qdrant runs in local mode (data in ./qdrant_data) unless QDRANT_URL points at a server.
 """
+
 import atexit
 import logging
 import uuid
@@ -55,21 +56,23 @@ def chunk_markdown(path: Path) -> list[dict]:
         line = raw.strip()
         if not line:
             continue
-        if line.endswith(":"):                        # e.g. "Interviewers should focus on:"
+        if line.endswith(":"):  # e.g. "Interviewers should focus on:"
             section = "Focus area"
             continue
         if line.lower().startswith("red flags:"):
             kind, text = "Red flag", line.split(":", 1)[1].strip()
         else:
             kind, text = section, line.removeprefix("- ").strip()
-        chunks.append({
-            "topic": title,
-            "kind": kind,
-            "text": text,
-            "source": path.name,
-            # Embed the topic and kind with the text so the vector carries that context
-            "content": f"{title} interview guideline. {kind}: {text}",
-        })
+        chunks.append(
+            {
+                "topic": title,
+                "kind": kind,
+                "text": text,
+                "source": path.name,
+                # Embed the topic and kind with the text so the vector carries that context
+                "content": f"{title} interview guideline. {kind}: {text}",
+            }
+        )
     return chunks
 
 
@@ -84,17 +87,18 @@ def ingest(kb_dir: Path | None = None) -> int:
     client = get_client()
     if client.collection_exists(COLLECTION):
         client.delete_collection(COLLECTION)
-    client.create_collection(
-        COLLECTION, vectors_config=VectorParams(size=len(vectors[0]), distance=Distance.COSINE)
+    client.create_collection(COLLECTION, vectors_config=VectorParams(size=len(vectors[0]), distance=Distance.COSINE))
+    client.upsert(
+        COLLECTION,
+        points=[
+            PointStruct(
+                id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{c['source']}#{i}")),
+                vector=vector,
+                payload=c,
+            )
+            for i, (c, vector) in enumerate(zip(chunks, vectors, strict=True))
+        ],
     )
-    client.upsert(COLLECTION, points=[
-        PointStruct(
-            id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{c['source']}#{i}")),
-            vector=vector,
-            payload=c,
-        )
-        for i, (c, vector) in enumerate(zip(chunks, vectors))
-    ])
     logger.info("Indexed %d guideline chunks from %s", len(chunks), kb_dir)
     return len(chunks)
 
@@ -113,7 +117,5 @@ def ensure_index() -> None:
 def search(query: str, top_k: int = TOP_K, min_score: float = MIN_SCORE) -> list[dict]:
     ensure_index()
     vector = get_embeddings().embed_query(query)
-    hits = get_client().query_points(
-        COLLECTION, query=vector, limit=top_k, score_threshold=min_score
-    ).points
+    hits = get_client().query_points(COLLECTION, query=vector, limit=top_k, score_threshold=min_score).points
     return [{**hit.payload, "score": round(hit.score, 3)} for hit in hits]

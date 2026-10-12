@@ -8,7 +8,12 @@ from app.api.routes.screenings import router as screenings_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.services.exceptions import (
-    InvalidScreeningInput, NotAwaitingReview, NotPaused, ScreeningError, ScreeningNotFound, WorkflowFailed,
+    InvalidScreeningInputError,
+    NotAwaitingReviewError,
+    NotPausedError,
+    ScreeningError,
+    ScreeningNotFoundError,
+    WorkflowFailedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,7 +22,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    settings = get_settings()      # fail fast at startup if required settings (API key) are missing
+    settings = get_settings()  # fail fast at startup if required settings (API key) are missing
     logger.info("Starting API with model %s", settings.gemini_model)
     yield
 
@@ -27,11 +32,11 @@ app.include_router(screenings_router)
 
 # Service errors → HTTP status codes, in one place
 STATUS_CODES = {
-    InvalidScreeningInput: 400,
-    ScreeningNotFound: 404,
-    NotAwaitingReview: 409,
-    NotPaused: 409,
-    WorkflowFailed: 500,
+    InvalidScreeningInputError: 400,
+    ScreeningNotFoundError: 404,
+    NotAwaitingReviewError: 409,
+    NotPausedError: 409,
+    WorkflowFailedError: 500,
 }
 
 

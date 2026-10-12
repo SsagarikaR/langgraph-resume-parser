@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from app.api.schemas import ContinueRequest, ReviewRequest, ScreeningResponse
 from app.core.config import get_settings
 from app.repositories.screening_repository import ScreeningRepository
-from app.services.exceptions import InvalidScreeningInput
+from app.services.exceptions import InvalidScreeningInputError
 from app.services.screening_service import ScreeningService
 
 router = APIRouter(prefix="/screenings", tags=["screenings"])
@@ -22,7 +22,7 @@ def read_upload(upload: UploadFile) -> bytes:
     limit = get_settings().max_upload_bytes
     data = upload.file.read(limit + 1)
     if len(data) > limit:
-        raise InvalidScreeningInput(f"'{upload.filename}' is larger than {get_settings().max_upload_mb} MB")
+        raise InvalidScreeningInputError(f"'{upload.filename}' is larger than {get_settings().max_upload_mb} MB")
     return data
 
 
@@ -51,16 +51,12 @@ def get_screening(thread_id: str, service: ScreeningService = Depends(get_servic
 
 
 @router.post("/{thread_id}/review", response_model=ScreeningResponse)
-def review_screening(
-    thread_id: str, review: ReviewRequest, service: ScreeningService = Depends(get_service)
-):
+def review_screening(thread_id: str, review: ReviewRequest, service: ScreeningService = Depends(get_service)):
     """Approve the questions or send them back with feedback."""
     return service.review(thread_id, review.action, review.feedback)
 
 
 @router.post("/{thread_id}/continue", response_model=ScreeningResponse)
-def continue_screening(
-    thread_id: str, body: ContinueRequest, service: ScreeningService = Depends(get_service)
-):
+def continue_screening(thread_id: str, body: ContinueRequest, service: ScreeningService = Depends(get_service)):
     """Resume a screening paused at a breakpoint, optionally correcting the skill match."""
     return service.continue_run(thread_id, body.matching_skills)

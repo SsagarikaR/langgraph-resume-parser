@@ -4,19 +4,19 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import interrupt
 from pydantic import BaseModel
 
-from app import prompts
 from app.core.config import get_settings
-from app.graph.errors import InvalidInputError
+from app.core.llm import get_llm, get_structured_llm
+from app.graph import prompts
+from app.graph.exceptions import InvalidInputError
 from app.graph.state import ResumeState
-from app.llm import get_llm, get_structured_llm
 from app.schemas.analysis import GapAnalysis, InterviewQuestionSet
 from app.schemas.job import JobRequirements
 from app.schemas.resume import ResumeProfile
-from app.tools.knowledge_tools import lookup_interview_guideline, NO_RESULTS, SEARCH_FAILED
+from app.tools.knowledge_tools import NO_RESULTS, SEARCH_FAILED, lookup_interview_guideline
 from app.tools.pdf_tools import extract_text_from_pdf
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ MIN_JD_LENGTH = 50
 
 def _structured_call(schema: type[BaseModel], system: str, human: str) -> BaseModel:
     result = get_structured_llm(schema).invoke([("system", system), ("human", human)])
-    if result is None:          # the model returned nothing parseable
+    if result is None:  # the model returned nothing parseable
         raise RuntimeError(f"LLM returned no {schema.__name__}")
     return result
 
@@ -64,7 +64,7 @@ def _role_months(role: dict, today: int) -> set[int]:
     end = today if role.get("is_current") else _month_index(role.get("end_date"))
     if start is None or end is None or end < start:
         return set()
-    return set(range(start, end + 1))          # inclusive: Jul-Jul counts as 1 month
+    return set(range(start, end + 1))  # inclusive: Jul-Jul counts as 1 month
 
 
 def extract_resume(state: ResumeState) -> dict:
@@ -79,7 +79,7 @@ def extract_resume(state: ResumeState) -> dict:
         months = _role_months(role, current_month)
         role["duration_months"] = len(months) or None
         all_months |= months
-    resume["total_experience_months"] = len(all_months)   # overlapping roles counted once
+    resume["total_experience_months"] = len(all_months)  # overlapping roles counted once
     return {"resume": resume, "steps": ["extract_resume"]}
 
 
@@ -176,7 +176,7 @@ def generate_questions(state: ResumeState) -> dict:
         "matching_skills": state["matching_skills"],
         "missing_skills": state["missing_skills"],
         "projects": state["resume"]["projects"],
-        "gap_analysis": state.get("gap_analysis"),   # may be None on strong-match path
+        "gap_analysis": state.get("gap_analysis"),  # may be None on strong-match path
     }
 
     # Look up company guidelines once; revisions reuse them from state
@@ -212,11 +212,11 @@ def gather_guidelines(topics: list[str]) -> str:
         SystemMessage(prompts.GUIDELINE_RESEARCH),
         HumanMessage(f"Role and candidate skills: {', '.join(topics)}"),
     ]
-    found = []                                 # raw guideline texts, used if no summary comes back
-    for _ in range(MAX_TOOL_ROUNDS):           # safety limit on loop iterations
+    found = []  # raw guideline texts, used if no summary comes back
+    for _ in range(MAX_TOOL_ROUNDS):  # safety limit on loop iterations
         ai = llm_with_tools.invoke(messages)
         messages.append(ai)
-        if not ai.tool_calls:                  # LLM is done using tools
+        if not ai.tool_calls:  # LLM is done using tools
             return _text(ai.content) or "\n\n".join(found)
         for call in ai.tool_calls:
             tool_fn = TOOLS.get(call["name"])
@@ -229,17 +229,19 @@ def gather_guidelines(topics: list[str]) -> str:
 
 
 def human_review(state: ResumeState) -> dict:
-    decision = interrupt({
-        "candidate": state["resume"]["name"],
-        "job_title": state["job"]["job_title"],
-        "match_percentage": state["match_percentage"],
-        "matching_skills": state["matching_skills"],
-        "missing_skills": state["missing_skills"],
-        "experience_gap_years": state["experience_gap_years"],
-        "gap_summary": (state.get("gap_analysis") or {}).get("summary"),
-        "num_questions": len(state["interview_questions"]),
-        "question_preview": [q["question"] for q in state["interview_questions"][:5]],
-    })
+    decision = interrupt(
+        {
+            "candidate": state["resume"]["name"],
+            "job_title": state["job"]["job_title"],
+            "match_percentage": state["match_percentage"],
+            "matching_skills": state["matching_skills"],
+            "missing_skills": state["missing_skills"],
+            "experience_gap_years": state["experience_gap_years"],
+            "gap_summary": (state.get("gap_analysis") or {}).get("summary"),
+            "num_questions": len(state["interview_questions"]),
+            "question_preview": [q["question"] for q in state["interview_questions"][:5]],
+        }
+    )
 
     if decision.get("action") == "approve":
         return {"approved": True, "steps": ["human_review:approved"]}
