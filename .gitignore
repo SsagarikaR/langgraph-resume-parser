@@ -7,3 +7,7 @@ checkpoints.db*
 reports/
 data/uploads/
 qdrant_data/
+*.egg-info/
+.ruff_cache/
+build/
+dist/
