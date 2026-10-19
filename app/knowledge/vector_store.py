@@ -22,8 +22,6 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 COLLECTION = "interview_guidelines"
-TOP_K = 4
-MIN_SCORE = 0.6
 
 
 @lru_cache
@@ -114,8 +112,12 @@ def ensure_index() -> None:
         ingest()
 
 
-def search(query: str, top_k: int = TOP_K, min_score: float = MIN_SCORE) -> list[dict]:
+def search(query: str) -> list[dict]:
+    """Closest guideline chunks to `query`, using the configured count and score cut-off."""
+    settings = get_settings()
     ensure_index()
     vector = get_embeddings().embed_query(query)
-    hits = get_client().query_points(COLLECTION, query=vector, limit=top_k, score_threshold=min_score).points
-    return [{**hit.payload, "score": round(hit.score, 3)} for hit in hits]
+    result = get_client().query_points(
+        COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
+    )
+    return [{**hit.payload, "score": round(hit.score, 3)} for hit in result.points]

@@ -1,4 +1,5 @@
-from app.graph.edges import MAX_REVISIONS, route_after_matching, route_after_review
+from app.core.config import get_settings
+from app.graph.edges import route_after_matching, route_after_review
 from app.graph.matching import is_met, month_index, normalize, role_months, skill_variants
 from app.graph.nodes import match_requirements
 from app.utils.files import safe_filename
@@ -59,8 +60,16 @@ def test_routing():
     assert route_after_matching({"match_percentage": 80, "experience_gap_years": 0}) == "strong_match"
     assert route_after_matching({"match_percentage": 80, "experience_gap_years": 2}) == "weak_match"
     assert route_after_review({"approved": True}) == "approved"
-    assert route_after_review({"revision_count": MAX_REVISIONS}) == "approved"
+    assert route_after_review({"revision_count": get_settings().max_revisions}) == "approved"
     assert route_after_review({"revision_count": 0}) == "revise"
+
+
+def test_routing_thresholds_come_from_settings(monkeypatch):
+    monkeypatch.setenv("MATCH_THRESHOLD", "90")
+    monkeypatch.setenv("MAX_REVISIONS", "1")
+    get_settings.cache_clear()
+    assert route_after_matching({"match_percentage": 80, "experience_gap_years": 0}) == "weak_match"
+    assert route_after_review({"revision_count": 1}) == "approved"
 
 
 def test_safe_filename_blocks_path_traversal():

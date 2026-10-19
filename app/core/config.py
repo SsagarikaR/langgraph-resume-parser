@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     uploads_dir: Path = Path("data/uploads")
     knowledge_base_dir: Path = Path("data/knowledge_base")
 
+    # ---- Screening rules ----
+    match_threshold: float = Field(70, ge=0, le=100)  # skill match % for the strong-match route
+    max_revisions: int = Field(3, ge=0)  # reviewer revisions before the report is written anyway
+
+    # ---- Guideline search ----
+    guideline_top_k: int = Field(4, gt=0)  # chunks returned per search
+    guideline_min_score: float = Field(0.6, ge=0, le=1)  # cosine similarity cut-off
+
     # ---- Limits ----
     max_upload_mb: int = Field(10, gt=0)
 
