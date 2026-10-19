@@ -25,3 +25,11 @@ def get_llm() -> BaseChatModel:
 def get_structured_llm(schema: type[BaseModel]):
     """The chat model constrained to return `schema`."""
     return get_llm().with_structured_output(schema)
+
+
+def structured_call(schema: type[BaseModel], system: str, human: str) -> BaseModel:
+    """One system + human message to the model, returned as an instance of `schema`."""
+    result = get_structured_llm(schema).invoke([("system", system), ("human", human)])
+    if result is None:  # the model returned nothing parseable
+        raise RuntimeError(f"LLM returned no {schema.__name__}")
+    return result

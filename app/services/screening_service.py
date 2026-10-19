@@ -12,7 +12,7 @@ from app.services.exceptions import (
     ScreeningNotFoundError,
     WorkflowFailedError,
 )
-from app.tools.pdf_tools import extract_text_from_pdf
+from app.utils.pdf import extract_text_from_pdf
 
 # Nodes a run may pause after (static breakpoints, i.e. LangGraph's interrupt_after)
 BREAKPOINT_NODES = ("match_requirements", "analyze_gaps", "generate_questions")
