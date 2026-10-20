@@ -2,6 +2,7 @@ import sqlite3
 from functools import lru_cache
 from pathlib import Path
 
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -57,7 +58,10 @@ def build_graph(db_path: Path | str) -> CompiledStateGraph:
     builder.add_edge("generate_report", END)
 
     conn = sqlite3.connect(db_path, check_same_thread=False)
-    return builder.compile(checkpointer=SqliteSaver(conn))
+    # Strict mode: checkpoints only load built-in safe types, never arbitrary classes, so an
+    # edited checkpoints.db cannot run code. The state is plain dicts, lists and scalars.
+    serde = JsonPlusSerializer(allowed_msgpack_modules=None)
+    return builder.compile(checkpointer=SqliteSaver(conn, serde=serde))
 
 
 @lru_cache
