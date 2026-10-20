@@ -12,7 +12,7 @@ from app.services.screening_service import ScreeningService
 
 router = APIRouter(prefix="/screenings", tags=["screenings"], dependencies=[Depends(api_rate_limit)])
 
-# API ids are uuid4 hex; the CLI lets users pick their own, so allow a safe superset
+# New ids are uuid4 hex; older CLI runs used names the user picked, so allow a safe superset
 ThreadId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
 
 
