@@ -11,3 +11,4 @@ qdrant_data/
 .ruff_cache/
 build/
 dist/
+evals/results/
