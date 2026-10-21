@@ -31,3 +31,6 @@ data/jds
 data/resumes
 Dockerfile
 docker-compose.yml
+scripts
+deploy
+backups
