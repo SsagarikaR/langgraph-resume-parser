@@ -18,5 +18,21 @@ class NotPausedError(ScreeningError):
     pass
 
 
+class ScreeningBusyError(ScreeningError):
+    """Another request is running or deleting this screening right now."""
+
+
 class WorkflowFailedError(ScreeningError):
     pass
+
+
+class ServerBusyError(ScreeningError):
+    """The server is already running as many workflows as it allows; retry shortly."""
+
+
+class BudgetExceededError(ServerBusyError):
+    """The server has used its daily LLM token budget; new runs wait until it frees up."""
+
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after
