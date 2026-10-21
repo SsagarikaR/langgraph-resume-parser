@@ -5,33 +5,29 @@
 # The app runs from source in /app (not pip-installed) because settings resolve
 # relative paths against the project root.
 
-ARG PYTHON_VERSION=3.12
+# Pinned by digest, so a rebuild gets the same base; Dependabot proposes updates
+ARG PYTHON_IMAGE=python:3.12-slim@sha256:2259debdc6af85626058a15a7bf44ad6a68b8c98c9ae82a02cf5cdb92f096d47
 
-# ---- Dependency builder: turns pyproject.toml into a venv, per image ----
-FROM python:${PYTHON_VERSION}-slim AS deps-base
+# ---- Dependency builder: installs a hash-pinned lockfile into a venv, per image ----
+FROM ${PYTHON_IMAGE} AS deps-base
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
     PATH=/opt/venv/bin:$PATH
 RUN python -m venv /opt/venv
 WORKDIR /build
-# Only pyproject.toml is copied, so the install layers are cached until dependencies change.
-# Prints the core dependencies, or one optional group when given its name.
-COPY pyproject.toml .
-RUN cat > deps.py <<'EOF'
-import sys, tomllib
-project = tomllib.load(open("pyproject.toml", "rb"))["project"]
-deps = project["optional-dependencies"][sys.argv[1]] if len(sys.argv) > 1 else project["dependencies"]
-print("\n".join(deps))
-EOF
+# --require-hashes: every package, dependencies included, must match the lockfile's hashes
+# (generated from pyproject.toml by scripts/lock.sh), so a build installs exactly what was locked.
 
 FROM deps-base AS api-deps
-RUN python deps.py > requirements.txt && pip install -r requirements.txt
+COPY requirements/api.txt .
+RUN pip install --require-hashes --no-deps -r api.txt
 
 FROM deps-base AS ui-deps
-RUN python deps.py ui > requirements.txt && pip install -r requirements.txt
+COPY requirements/ui.txt .
+RUN pip install --require-hashes --no-deps -r ui.txt
 
 # ---- Shared runtime base: non-root user, no build tools ----
-FROM python:${PYTHON_VERSION}-slim AS runtime
+FROM ${PYTHON_IMAGE} AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH=/opt/venv/bin:$PATH \
