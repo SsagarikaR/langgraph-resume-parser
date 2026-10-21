@@ -11,6 +11,16 @@ from app.core.config import get_settings  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
+def process_limits_unchanged():
+    """Fail the test that lowers this process's resource limits (e.g. by running the PDF reader's
+    child code in-process): they cannot be raised again, and later tests would break at random."""
+    resource = pytest.importorskip("resource")
+    before = resource.getrlimit(resource.RLIMIT_AS)
+    yield
+    assert resource.getrlimit(resource.RLIMIT_AS) == before, "a test lowered the process's address-space limit"
+
+
+@pytest.fixture(autouse=True)
 def test_settings(tmp_path, monkeypatch):
     """Isolated settings for every test: dummy key, all storage under tmp_path."""
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")

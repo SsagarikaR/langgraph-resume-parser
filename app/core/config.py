@@ -46,6 +46,9 @@ class Settings(BaseSettings):
 
     # ---- Limits ----
     max_upload_mb: int = Field(10, gt=0)
+    # Text extraction from an uploaded PDF runs in a child process killed after this long, so a
+    # crafted PDF cannot hold a worker for good
+    pdf_timeout_seconds: float = Field(30, gt=0)
 
     # ---- HTTP API ----
     # Browser origins allowed to call the API, comma-separated in the env. Empty = no CORS.
