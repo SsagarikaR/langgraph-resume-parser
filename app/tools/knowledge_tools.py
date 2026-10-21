@@ -19,7 +19,8 @@ def lookup_interview_guideline(topic: str) -> str:
         hits = search(topic)
     except Exception:
         # Guidelines are optional context: a vector-store outage should not fail the screening
-        logger.exception("Guideline search failed for %r", topic)
+        # Not the topic: it comes from the resume (skill names), and error logs carry no resume data
+        logger.exception("Guideline search failed")
         return f"{SEARCH_FAILED}; continue without guidelines for '{topic}'."
     if not hits:
         return f"{NO_RESULTS} for '{topic}'."

@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
+from app.graph import runner
 from app.graph.graph import build_graph
-from app.repositories import screening_repository
-from app.repositories.screening_repository import ScreeningRepository
+from app.graph.runner import WorkflowRunner
 
 
 @dataclass
@@ -17,7 +17,7 @@ def test_checkpoints_do_not_rebuild_arbitrary_classes(tmp_path):
     assert loaded["value"] == {"command": "rm -rf /"}
 
 
-def test_repository_stream_reports_step_progress(monkeypatch):
+def test_runner_stream_reports_step_progress(monkeypatch):
     class FakeGraph:  # task events as LangGraph's stream_mode="tasks" sends them
         def stream(self, *args, **kwargs):
             yield {"id": "1", "name": "parse_resume", "input": {}, "triggers": []}
@@ -25,8 +25,8 @@ def test_repository_stream_reports_step_progress(monkeypatch):
             yield {"id": "2", "name": "human_review", "input": {}, "triggers": []}
             yield {"id": "2", "name": "human_review", "error": None, "result": {}, "interrupts": [{"value": {}}]}
 
-    monkeypatch.setattr(screening_repository, "get_graph", FakeGraph)
-    assert list(ScreeningRepository().stream({}, "t1")) == [
+    monkeypatch.setattr(runner, "get_graph", FakeGraph)
+    assert list(WorkflowRunner().stream({}, "t1")) == [
         ("started", "parse_resume"),
         ("finished", "parse_resume"),
         ("started", "human_review"),

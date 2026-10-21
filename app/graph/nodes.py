@@ -1,26 +1,22 @@
 """The workflow steps. Each node takes the state and returns only the keys it changes."""
 
 import json
-import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from langgraph.types import interrupt
 
+from app.core import prompts
 from app.core.config import get_settings
 from app.core.llm import structured_call
-from app.graph import prompts
 from app.graph.exceptions import InvalidInputError
-from app.graph.guidelines import gather_guidelines
-from app.graph.matching import is_met, role_months, skill_variants
+from app.graph.matching import candidate_skills, is_met, role_months, unverified_skills
 from app.graph.state import ResumeState
 from app.schemas.analysis import GapAnalysis, InterviewQuestionSet
 from app.schemas.job import JobRequirements
 from app.schemas.resume import ResumeProfile
-from app.utils.files import safe_filename
-from app.utils.pdf import extract_text_from_pdf
-
-logger = logging.getLogger(__name__)
+from app.tools.guidelines import gather_guidelines
+from app.utils.pdf import UnreadablePdfError, extract_text_from_pdf
 
 MIN_JD_LENGTH = 50
 
@@ -31,24 +27,46 @@ def validate_input(state: ResumeState) -> dict:
         raise InvalidInputError(f"Resume file not found: {path}")
     if not path.lower().endswith(".pdf"):
         raise InvalidInputError("Resume must be a PDF")
-    if len(state.get("job_description", "").strip()) < MIN_JD_LENGTH:
+    jd_length = len(state.get("job_description", "").strip())
+    if jd_length < MIN_JD_LENGTH:
         raise InvalidInputError("Job description is missing or too short")
-    return {"steps": ["validate_input"]}
+    if jd_length > get_settings().max_document_chars:
+        raise InvalidInputError(f"Job description is longer than {get_settings().max_document_chars} characters")
+    # Experience is counted up to this day (UTC), so a run resumed or retried later gets the same numbers
+    return {"screened_on": datetime.now(timezone.utc).date().isoformat(), "steps": ["validate_input"]}
 
 
 def parse_resume(state: ResumeState) -> dict:
-    text = extract_text_from_pdf(state["resume_path"])
+    path = Path(state["resume_path"])
+    if not path.exists():
+        # Not a workflow failure that a retry could fix: the screening cannot go on without it
+        raise InvalidInputError("The uploaded resume is no longer stored; start a new screening")
+    try:
+        text = extract_text_from_pdf(path)
+    except UnreadablePdfError as e:
+        path.unlink(missing_ok=True)  # an input error ends (and erases) the screening
+        raise InvalidInputError(f"Resume: {e}") from e
     if not text:
         raise InvalidInputError("No text extracted. The PDF may be scanned and need OCR")
+    limit = get_settings().max_document_chars
+    if len(text) > limit:
+        raise InvalidInputError(f"Resume text is longer than {limit} characters")
     return {"resume_text": text, "steps": ["parse_resume"]}
 
 
 def extract_resume(state: ResumeState) -> dict:
-    profile = structured_call(ResumeProfile, prompts.RESUME_EXTRACTION, state["resume_text"])
+    # Data minimisation: the text is all later steps need, so the uploaded PDF goes now. Not in
+    # parse_resume: its text is saved (checkpointed) only once it returns, and a run cut off before
+    # that re-runs parse_resume, which needs the file. No path when called on text alone (the evals).
+    if resume_path := state.get("resume_path"):
+        Path(resume_path).unlink(missing_ok=True)
+    profile = structured_call(ResumeProfile, prompts.RESUME_EXTRACTION, prompts.as_document(state["resume_text"]))
     resume = profile.model_dump()
+    resume["unverified_skills"] = unverified_skills(resume, state["resume_text"])
 
     # Durations are computed here, not by the LLM, so they are correct and repeatable
-    today = date.today()
+    screened_on = state.get("screened_on")
+    today = date.fromisoformat(screened_on) if screened_on else datetime.now(timezone.utc).date()
     current_month = today.year * 12 + today.month - 1
     all_months: set[int] = set()
     for role in resume["experience"]:
@@ -60,24 +78,23 @@ def extract_resume(state: ResumeState) -> dict:
 
 
 def analyze_job(state: ResumeState) -> dict:
-    job = structured_call(JobRequirements, prompts.JOB_EXTRACTION, state["job_description"])
+    job = structured_call(JobRequirements, prompts.JOB_EXTRACTION, prompts.as_document(state["job_description"]))
+    if not job.required_skills:
+        # Nothing to match against would score 100% and skip the gap analysis: a misleading strong match
+        raise InvalidInputError("No required skills found in the job description")
     return {"job": job.model_dump(), "steps": ["analyze_job"]}
 
 
 def match_requirements(state: ResumeState) -> dict:
     resume, job = state["resume"], state["job"]
-
-    # Skills from the skills section AND from project tech stacks
-    candidate_skills: set[str] = set()
-    for s in resume["skills"]:
-        candidate_skills |= skill_variants(s)
-    for project in resume["projects"]:
-        for t in project["technologies"]:
-            candidate_skills |= skill_variants(t)
+    # Skills from the skills section AND from project tech stacks, if the resume text mentions them
+    skills = candidate_skills(resume)
 
     required = job["required_skills"]
-    matching = [s for s in required if is_met(s, candidate_skills)]
-    missing = [s for s in required if not is_met(s, candidate_skills)]
+    matching: list[str] = []
+    missing: list[str] = []
+    for skill in required:
+        (matching if is_met(skill, skills) else missing).append(skill)
     pct = round(100 * len(matching) / len(required), 1) if required else 100.0
 
     years = round(resume.get("total_experience_months", 0) / 12, 1)
@@ -93,18 +110,37 @@ def match_requirements(state: ResumeState) -> dict:
     }
 
 
+def preferred_skills(state: ResumeState) -> dict:
+    """The job's nice-to-have skills the candidate has and lacks: informational, never scored."""
+    skills = candidate_skills(state["resume"])
+    preferred = state["job"].get("preferred_skills", [])
+    return {
+        "matching": [s for s in preferred if is_met(s, skills)],
+        "missing": [s for s in preferred if not is_met(s, skills)],
+    }
+
+
 def analyze_gaps(state: ResumeState) -> dict:
     facts = {
         "job_title": state["job"]["job_title"],
         "required_skills": state["job"]["required_skills"],
         "missing_skills": state["missing_skills"],
         "matching_skills": state["matching_skills"],
+        "preferred_skills": preferred_skills(state),
         "required_years": state["job"].get("required_experience_years"),
         "candidate_years": state["candidate_experience_years"],
         "projects": state["resume"]["projects"],
     }
     analysis = structured_call(GapAnalysis, prompts.GAP_ANALYSIS, json.dumps(facts, indent=2))
     return {"gap_analysis": analysis.model_dump(), "steps": ["analyze_gaps"]}
+
+
+def research_guidelines(state: ResumeState) -> dict:
+    """Company interview guidelines for the role and the candidate's skills, looked up once per
+    screening. A step of its own, so a retried or revised question step reuses them instead of
+    running the search loop (several LLM and embedding calls) again."""
+    topics = [state["job"]["job_title"], *state["matching_skills"], *state["missing_skills"]]
+    return {"interview_guidelines": gather_guidelines(topics), "steps": ["research_guidelines"]}
 
 
 def generate_questions(state: ResumeState) -> dict:
@@ -114,25 +150,16 @@ def generate_questions(state: ResumeState) -> dict:
         "missing_skills": state["missing_skills"],
         "projects": state["resume"]["projects"],
         "gap_analysis": state.get("gap_analysis"),  # may be None on strong-match path
+        "company_interview_guidelines": state.get("interview_guidelines") or "None found",
     }
-
-    # Look up company guidelines once; revisions reuse them from state
-    guidelines = state.get("interview_guidelines")
-    if guidelines is None:
-        topics = [state["job"]["job_title"], *state["matching_skills"], *state["missing_skills"]]
-        guidelines = gather_guidelines(topics)
-    context["company_interview_guidelines"] = guidelines or "None found"
 
     instructions = prompts.QUESTION_GENERATION
     if state.get("review_feedback"):
-        instructions += prompts.QUESTION_REVISION.format(feedback=state["review_feedback"])
+        instructions += prompts.QUESTION_REVISION
+        context["reviewer_feedback"] = state["review_feedback"]
 
     result = structured_call(InterviewQuestionSet, instructions, json.dumps(context, indent=2))
-    return {
-        "interview_questions": [q.model_dump() for q in result.questions],
-        "interview_guidelines": guidelines,
-        "steps": ["generate_questions"],
-    }
+    return {"interview_questions": [q.model_dump() for q in result.questions], "steps": ["generate_questions"]}
 
 
 def human_review(state: ResumeState) -> dict:
@@ -150,25 +177,44 @@ def human_review(state: ResumeState) -> dict:
         }
     )
 
+    # Audit trail: who decided what, and when. "client" is the API key's name; "reviewer" is the
+    # person, as named by that client (the UI sends its signed-in user), or the client itself.
+    review = {
+        "action": decision.get("action"),
+        "reviewer": decision.get("reviewer"),
+        # Whether an API key vouched for the name; a name typed at a shared login is only a claim
+        "reviewer_verified": bool(decision.get("reviewer_verified")),
+        "client": decision.get("client"),
+        "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
     if decision.get("action") == "approve":
-        return {"approved": True, "steps": ["human_review:approved"]}
+        return {"approved": True, "reviews": [review], "steps": ["human_review:approved"]}
 
     return {
         "approved": False,
         "review_feedback": decision.get("feedback", ""),
         "revision_count": state.get("revision_count", 0) + 1,
+        "reviews": [{**review, "feedback": decision.get("feedback", "")}],
         "steps": ["human_review:revise"],
     }
 
 
 def generate_report(state: ResumeState) -> dict:
-    now = datetime.now()
+    """The final report, kept in the workflow state. Clients get it from there; it is written to a
+    file only when someone exports it (the CLI does), so personal data is not copied by default."""
+    reviews = state.get("reviews", [])
     report = {
-        "candidate": {"name": state["resume"]["name"], "email": state["resume"]["email"]},
+        "candidate": {
+            "name": state["resume"]["name"],
+            "email": state["resume"]["email"],
+            "education": state["resume"].get("education", []),
+        },
         "job_title": state["job"]["job_title"],
         "match_percentage": state["match_percentage"],
         "matching_skills": state["matching_skills"],
         "missing_skills": state["missing_skills"],
+        "preferred_skills": preferred_skills(state),
+        "unverified_skills": state["resume"].get("unverified_skills", []),
         "experience": {
             "candidate_years": state["candidate_experience_years"],
             "required_years": state["job"].get("required_experience_years"),
@@ -179,12 +225,9 @@ def generate_report(state: ResumeState) -> dict:
         "interview_guidelines": state.get("interview_guidelines"),
         "interview_questions": state["interview_questions"],
         "approved_by_human": state.get("approved", False),
+        "approved_by": reviews[-1]["reviewer"] if state.get("approved") and reviews else None,
+        "reviews": reviews,
         "revisions": state.get("revision_count", 0),
-        "generated_at": now.isoformat(timespec="seconds"),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    reports_dir = get_settings().reports_dir
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    path = reports_dir / f"{safe_filename(state['resume']['name'])}_{now:%Y%m%d_%H%M%S}.json"
-    path.write_text(json.dumps(report, indent=2))
-    logger.info("Report written to %s", path)
-    return {"final_report": report, "report_path": str(path), "steps": ["generate_report"]}
+    return {"final_report": report, "steps": ["generate_report"]}
