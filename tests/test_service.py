@@ -20,14 +20,16 @@ class FakeRepository:
         self.run_error = run_error
         self.values = values if values is not None else {"steps": ["validate_input"]}
         self.saved = []
+        self.steps = [("started", "validate_input"), ("finished", "validate_input")]
 
     def save_upload(self, thread_id, kind, data, suffix):
         self.saved.append((kind, suffix))
         return f"/tmp/{thread_id}_{kind}{suffix}"
 
-    def run(self, graph_input, thread_id, interrupt_after=None):
+    def stream(self, graph_input, thread_id, interrupt_after=None):
         if self.run_error:
             raise self.run_error
+        yield from self.steps
 
     def get_state(self, thread_id):
         return SimpleNamespace(values=self.values, tasks=[], next=())
@@ -81,3 +83,27 @@ def test_review_requires_awaiting_review_status():
     repo = FakeRepository(values={"steps": ["generate_report"], "final_report": {}})
     with pytest.raises(NotAwaitingReviewError):
         ScreeningService(repo).review("t1", "approve")
+
+
+def test_start_stream_yields_steps_then_the_result():
+    events = list(ScreeningService(FakeRepository()).start_stream("cv.pdf", PDF, jd_text=JD))
+    assert events[:2] == [
+        {"type": "step", "node": "validate_input", "event": "started"},
+        {"type": "step", "node": "validate_input", "event": "finished"},
+    ]
+    assert events[-1]["type"] == "result"
+    assert events[-1]["screening"]["steps"] == ["validate_input"]
+
+
+def test_start_stream_checks_input_before_streaming():
+    # Raised by the call itself, before any event, so the API can still answer with a plain 400
+    with pytest.raises(InvalidScreeningInputError):
+        ScreeningService(FakeRepository()).start_stream("cv.docx", PDF, jd_text=JD)
+
+
+def test_failure_mid_stream_is_mapped():
+    events = ScreeningService(FakeRepository(run_error=RuntimeError("provider down"))).start_stream(
+        "cv.pdf", PDF, jd_text=JD
+    )
+    with pytest.raises(WorkflowFailedError):
+        list(events)

@@ -1,19 +1,27 @@
+import json
+from collections.abc import Iterator
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Path, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from fastapi.responses import StreamingResponse
 
+from app.api.errors import status_code_for
 from app.api.rate_limit import api_rate_limit, workflow_rate_limit
 from app.api.schemas import ContinueRequest, ReviewRequest, ScreeningResponse
 from app.core.config import get_settings
 from app.repositories.screening_repository import ScreeningRepository
-from app.services.exceptions import InvalidScreeningInputError
+from app.services.exceptions import InvalidScreeningInputError, ScreeningError
 from app.services.screening_service import ScreeningService
 
 router = APIRouter(prefix="/screenings", tags=["screenings"], dependencies=[Depends(api_rate_limit)])
 
 # New ids are uuid4 hex; older CLI runs used names the user picked, so allow a safe superset
 ThreadId = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+Stream = Annotated[
+    bool,
+    Query(description="Return progress as NDJSON events (one JSON object per line) instead of one JSON response"),
+]
 
 
 @lru_cache
@@ -34,6 +42,26 @@ def read_upload(upload: UploadFile) -> bytes:
     return data
 
 
+def ndjson(events: Iterator[dict]) -> Iterator[str]:
+    """Progress events as JSON lines. Once streaming has started the status code is already
+    sent, so a failure after that becomes a final {"type": "error"} event instead."""
+    try:
+        for event in events:
+            if event["type"] == "result":
+                screening = ScreeningResponse.model_validate(event["screening"]).model_dump(mode="json")
+                event = {**event, "screening": screening}
+            yield json.dumps(event) + "\n"
+    except ScreeningError as e:
+        yield json.dumps({"type": "error", "status": status_code_for(e), "detail": str(e)}) + "\n"
+
+
+def respond(events: Iterator[dict], stream: bool):
+    """Stream the events, or run them to the end and return the screening."""
+    if stream:
+        return StreamingResponse(ndjson(events), media_type="application/x-ndjson")
+    return ScreeningService.final_view(events)
+
+
 @router.post("", response_model=ScreeningResponse, dependencies=[Depends(workflow_rate_limit)])
 def start_screening(
     resume: Annotated[UploadFile, File(description="Resume PDF")],
@@ -41,9 +69,10 @@ def start_screening(
     jd_text: Annotated[str | None, Form()] = None,
     jd_file: Annotated[UploadFile | None, File()] = None,
     breakpoints: Annotated[list[str] | None, Form(description="Nodes to pause after, e.g. match_requirements")] = None,
+    stream: Stream = False,
 ):
     """Upload a resume and JD; runs the workflow until it pauses for review or at a breakpoint."""
-    return service.start(
+    events = service.start_stream(
         resume_filename=resume.filename or "",
         resume_bytes=read_upload(resume),
         jd_text=jd_text,
@@ -51,6 +80,7 @@ def start_screening(
         jd_bytes=read_upload(jd_file) if jd_file else None,
         breakpoints=breakpoints,
     )
+    return respond(events, stream)
 
 
 @router.get("/{thread_id}", response_model=ScreeningResponse)
@@ -59,12 +89,12 @@ def get_screening(thread_id: ThreadId, service: ServiceDep):
 
 
 @router.post("/{thread_id}/review", response_model=ScreeningResponse, dependencies=[Depends(workflow_rate_limit)])
-def review_screening(thread_id: ThreadId, review: ReviewRequest, service: ServiceDep):
+def review_screening(thread_id: ThreadId, review: ReviewRequest, service: ServiceDep, stream: Stream = False):
     """Approve the questions or send them back with feedback."""
-    return service.review(thread_id, review.action, review.feedback)
+    return respond(service.review_stream(thread_id, review.action, review.feedback), stream)
 
 
 @router.post("/{thread_id}/continue", response_model=ScreeningResponse, dependencies=[Depends(workflow_rate_limit)])
-def continue_screening(thread_id: ThreadId, body: ContinueRequest, service: ServiceDep):
+def continue_screening(thread_id: ThreadId, body: ContinueRequest, service: ServiceDep, stream: Stream = False):
     """Resume a screening paused at a breakpoint, optionally correcting the skill match."""
-    return service.continue_run(thread_id, body.matching_skills)
+    return respond(service.continue_stream(thread_id, body.matching_skills), stream)

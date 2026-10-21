@@ -1,5 +1,6 @@
 import logging
 import uuid
+from collections.abc import Iterator
 
 from langgraph.types import Command, StateSnapshot
 
@@ -22,7 +23,13 @@ logger = logging.getLogger(__name__)
 
 
 class ScreeningService:
-    """Business logic for screenings: start, read and review. Knows nothing about HTTP."""
+    """Business logic for screenings: start, read and review. Knows nothing about HTTP.
+
+    Each workflow operation has a *_stream form that yields progress events while the graph
+    runs, then a final {"type": "result", "screening": ...} event. Input checks run before the
+    stream is returned, so they raise straight away. The plain forms run the same stream to
+    the end, so both share one code path.
+    """
 
     def __init__(self, repository: ScreeningRepository):
         self.repository = repository
@@ -38,6 +45,19 @@ class ScreeningService:
         breakpoints: list[str] | None = None,
     ) -> dict:
         """Run the workflow until it pauses for human review, hits a breakpoint, or fails."""
+        return self.final_view(
+            self.start_stream(resume_filename, resume_bytes, jd_text, jd_filename, jd_bytes, breakpoints)
+        )
+
+    def start_stream(
+        self,
+        resume_filename: str,
+        resume_bytes: bytes,
+        jd_text: str | None = None,
+        jd_filename: str | None = None,
+        jd_bytes: bytes | None = None,
+        breakpoints: list[str] | None = None,
+    ) -> Iterator[dict]:
         if not resume_filename.lower().endswith(".pdf") or not resume_bytes.startswith(PDF_MAGIC):
             raise InvalidScreeningInputError("Resume must be a PDF")
         breakpoints = list(dict.fromkeys(breakpoints or []))
@@ -52,7 +72,7 @@ class ScreeningService:
         resume_path = self.repository.save_upload(thread_id, "resume", resume_bytes, ".pdf")
         job_description = self._read_job_description(thread_id, jd_text, jd_filename, jd_bytes)
 
-        return self._run(
+        return self._stream(
             {"resume_path": str(resume_path), "job_description": job_description, "breakpoints": breakpoints},
             thread_id,
             breakpoints,
@@ -63,13 +83,19 @@ class ScreeningService:
 
     def review(self, thread_id: str, action: str, feedback: str = "") -> dict:
         """Resume the paused workflow with the reviewer's decision."""
+        return self.final_view(self.review_stream(thread_id, action, feedback))
+
+    def review_stream(self, thread_id: str, action: str, feedback: str = "") -> Iterator[dict]:
         view = self.get(thread_id)
         if view["status"] != "awaiting_review":
             raise NotAwaitingReviewError("This screening is not waiting for review")
-        return self._run(Command(resume={"action": action, "feedback": feedback}), thread_id, view["breakpoints"])
+        return self._stream(Command(resume={"action": action, "feedback": feedback}), thread_id, view["breakpoints"])
 
     def continue_run(self, thread_id: str, matching_skills: list[str] | None = None) -> dict:
         """Resume a run stopped at a breakpoint, optionally correcting the skill match first."""
+        return self.final_view(self.continue_stream(thread_id, matching_skills))
+
+    def continue_stream(self, thread_id: str, matching_skills: list[str] | None = None) -> Iterator[dict]:
         snapshot = self.repository.get_state(thread_id)
         view = self._to_view(thread_id, snapshot)
         if view["status"] != "paused":
@@ -79,7 +105,7 @@ class ScreeningService:
             self._override_skill_match(thread_id, snapshot.values, matching_skills)
 
         # Input None = "carry on from the saved checkpoint"
-        return self._run(None, thread_id, view["breakpoints"])
+        return self._stream(None, thread_id, view["breakpoints"])
 
     # ---------------- helpers ----------------
     def _override_skill_match(self, thread_id: str, values: dict, matching_skills: list[str]) -> None:
@@ -106,10 +132,11 @@ class ScreeningService:
             as_node="match_requirements",
         )
 
-    def _run(self, graph_input, thread_id: str, breakpoints: list[str]) -> dict:
+    def _stream(self, graph_input, thread_id: str, breakpoints: list[str]) -> Iterator[dict]:
         try:
-            # Static breakpoints apply per invoke call, so they are passed on every resume
-            self.repository.run(graph_input, thread_id, interrupt_after=breakpoints)
+            # Static breakpoints apply per run, so they are passed on every resume
+            for event, node in self.repository.stream(graph_input, thread_id, interrupt_after=breakpoints):
+                yield {"type": "step", "node": node, "event": event}
         except InvalidInputError as e:  # input problems raised by validate_input / parse_resume
             raise InvalidScreeningInputError(str(e)) from e
         except Exception as e:
@@ -118,7 +145,15 @@ class ScreeningService:
             raise WorkflowFailedError(
                 f"Screening {thread_id} failed ({type(e).__name__}). See server logs for details."
             ) from e
-        return self.get(thread_id)
+        yield {"type": "result", "screening": self.get(thread_id)}
+
+    @staticmethod
+    def final_view(events: Iterator[dict]) -> dict:
+        """Run a stream to the end and return its result, for callers that don't show progress."""
+        for event in events:
+            if event["type"] == "result":
+                return event["screening"]
+        raise WorkflowFailedError("Workflow ended without a result")
 
     def _read_job_description(
         self, thread_id: str, jd_text: str | None, jd_filename: str | None, jd_bytes: bytes | None

@@ -6,28 +6,13 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.errors import handle_screening_error
 from app.api.routes.screenings import router as screenings_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
-from app.services.exceptions import (
-    InvalidScreeningInputError,
-    NotAwaitingReviewError,
-    NotPausedError,
-    ScreeningError,
-    ScreeningNotFoundError,
-    WorkflowFailedError,
-)
+from app.services.exceptions import ScreeningError
 
 logger = logging.getLogger(__name__)
-
-# Service errors → HTTP status codes, in one place
-STATUS_CODES = {
-    InvalidScreeningInputError: 400,
-    ScreeningNotFoundError: 404,
-    NotAwaitingReviewError: 409,
-    NotPausedError: 409,
-    WorkflowFailedError: 500,
-}
 
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -51,10 +36,6 @@ async def lifespan(app: FastAPI):
         else "off",
     )
     yield
-
-
-def handle_screening_error(request: Request, exc: ScreeningError) -> JSONResponse:
-    return JSONResponse(status_code=STATUS_CODES.get(type(exc), 500), content={"detail": str(exc)})
 
 
 async def limit_request_size(request: Request, call_next: CallNext) -> Response:

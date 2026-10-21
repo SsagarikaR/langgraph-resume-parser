@@ -7,11 +7,28 @@ import streamlit as st
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 TIMEOUT = 300  # LLM steps can take a while
 BREAKPOINT_NODES = ["match_requirements", "analyze_gaps", "generate_questions"]
+# What each workflow step is doing, shown while it runs
+STEP_LABELS = {
+    "validate_input": "Checking the inputs",
+    "parse_resume": "Reading the resume PDF",
+    "extract_resume": "Extracting resume details",
+    "analyze_job": "Analysing the job description",
+    "match_requirements": "Matching skills and experience",
+    "analyze_gaps": "Analysing gaps",
+    "generate_questions": "Looking up interview guidelines and drafting questions",
+    "human_review": "Recording your review",
+    "generate_report": "Writing the report",
+}
 
 st.set_page_config(page_title="Resume Screening", page_icon="📄", layout="wide")
 
 
 # ---------------- API helpers ----------------
+def show_api_error(r: requests.Response) -> None:
+    detail = r.json().get("detail", r.text) if "json" in r.headers.get("content-type", "") else r.text
+    st.error(f"API error {r.status_code}: {detail}")
+
+
 def api(method: str, path: str, **kwargs) -> dict | None:
     try:
         r = requests.request(method, f"{API_URL}{path}", timeout=TIMEOUT, **kwargs)
@@ -19,10 +36,50 @@ def api(method: str, path: str, **kwargs) -> dict | None:
         st.error(f"Cannot reach the API at {API_URL}. Is the server running?")
         return None
     if not r.ok:
-        detail = r.json().get("detail", r.text) if "json" in r.headers.get("content-type", "") else r.text
-        st.error(f"API error {r.status_code}: {detail}")
+        show_api_error(r)
         return None
     return r.json()
+
+
+def run_with_progress(title: str, path: str, **kwargs) -> dict | None:
+    """POST to a workflow endpoint with ?stream=true and show each step live as the graph runs.
+
+    The API sends one JSON event per line: {"type": "step", ...} as each node starts and ends,
+    then {"type": "result", "screening": ...}, or {"type": "error", ...} if a step fails.
+    """
+    with st.status(title, expanded=True) as status:
+        try:
+            r = requests.post(f"{API_URL}{path}", params={"stream": "true"}, stream=True, timeout=TIMEOUT, **kwargs)
+        except requests.ConnectionError:
+            status.update(label="Cannot reach the API", state="error")
+            st.error(f"Cannot reach the API at {API_URL}. Is the server running?")
+            return None
+        with r:
+            if not r.ok:  # rejected before the workflow started (bad input, rate limit, …)
+                status.update(label="Request rejected", state="error")
+                show_api_error(r)
+                return None
+            for line in r.iter_lines():
+                if not line:
+                    continue
+                event = json.loads(line)
+                if event["type"] == "step":
+                    label = STEP_LABELS.get(event["node"], event["node"])
+                    if event["event"] == "started":
+                        status.update(label=f"{label}…")
+                    elif event["event"] == "finished":
+                        status.write(f"✅ {label}")
+                    else:  # interrupted: the graph paused for the reviewer
+                        status.write("⏸ Questions ready for your review")
+                elif event["type"] == "error":
+                    status.update(label="Workflow failed", state="error")
+                    st.error(f"API error {event['status']}: {event['detail']}")
+                    return None
+                elif event["type"] == "result":
+                    status.update(label="Done", state="complete", expanded=False)
+                    return event["screening"]
+        status.update(label="Connection closed before the workflow finished", state="error")
+        return None
 
 
 def api_is_up() -> bool:
@@ -84,8 +141,9 @@ def new_screening_form():
         files = {"resume": (resume.name, resume.getvalue(), "application/pdf")}
         if jd_file is not None and not jd_text.strip():
             files["jd_file"] = (jd_file.name, jd_file.getvalue(), jd_file.type or "application/octet-stream")
-        with st.spinner("Running the screening… this usually takes 30–60 seconds."):
-            data = api("POST", "/screenings", files=files, data={"jd_text": jd_text, "breakpoints": breakpoints})
+        data = run_with_progress(
+            "Running the screening…", "/screenings", files=files, data={"jd_text": jd_text, "breakpoints": breakpoints}
+        )
         if data:
             st.session_state.screening = data
             st.rerun()
@@ -162,8 +220,7 @@ def review_form(s: dict):
         else:
             decision = {"action": "revise", "feedback": feedback}
     if decision:
-        with st.spinner("Updating…"):
-            data = api("POST", f"/screenings/{s['thread_id']}/review", json=decision)
+        data = run_with_progress("Updating…", f"/screenings/{s['thread_id']}/review", json=decision)
         if data:
             st.session_state.screening = data
             st.rerun()
@@ -188,8 +245,7 @@ def breakpoint_form(s: dict):
     if st.button("Continue ▶", type="primary"):
         edited = matching is not None and set(matching) != set(s["matching_skills"])
         body = {"matching_skills": matching} if edited else {}
-        with st.spinner("Continuing…"):
-            data = api("POST", f"/screenings/{s['thread_id']}/continue", json=body)
+        data = run_with_progress("Continuing…", f"/screenings/{s['thread_id']}/continue", json=body)
         if data:
             st.session_state.screening = data
             st.rerun()
