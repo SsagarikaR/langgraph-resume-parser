@@ -1,0 +1,14 @@
+.venv
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+checkpoints.db*
+reports/
+data/uploads/
+qdrant_data/
+*.egg-info/
+.ruff_cache/
+build/
+dist/
+evals/results/

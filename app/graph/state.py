@@ -1,0 +1,34 @@
+import operator
+from typing import Annotated, TypedDict
+
+
+class ResumeState(TypedDict, total=False):
+    resume_path: str
+    job_description: str
+    resume_text: str
+
+    # ---- Structured extraction stored as dictionaries ----
+    resume: dict
+    job: dict
+
+    matching_skills: list[str]
+    missing_skills: list[str]
+    match_percentage: float
+    candidate_experience_years: float
+    experience_gap_years: float
+
+    gap_analysis: dict
+    interview_guidelines: str
+    interview_questions: list[dict]
+
+    approved: bool
+    review_feedback: str
+    revision_count: int
+
+    final_report: dict
+    report_path: str
+
+    # Static breakpoints chosen for this run (node names to pause after)
+    breakpoints: list[str]
+
+    steps: Annotated[list[str], operator.add]
