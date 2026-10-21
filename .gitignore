@@ -12,3 +12,6 @@ qdrant_data/
 build/
 dist/
 evals/results/
+.mypy_cache/
+.coverage
+htmlcov/
