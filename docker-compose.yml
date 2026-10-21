@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    env_file: .env
+    environment:
+      # Overrides .env: use the Qdrant service instead of local file mode
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "8000:8000"
+    volumes:
+      - screener-data:/var/lib/screener
+    depends_on:
+      qdrant:
+        condition: service_started
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      target: ui
+    environment:
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.2-unprivileged # matches qdrant-client ~=1.19; runs as non-root
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+volumes:
+  screener-data:
+  qdrant-data:

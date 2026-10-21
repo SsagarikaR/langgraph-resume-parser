@@ -1,0 +1,33 @@
+# Keep the build context small and secrets out of images
+.git
+.github
+.venv
+.env
+.env.*
+!.env.example
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+*.egg-info
+build
+dist
+.code-review-graph
+
+# Runtime state
+checkpoints.db*
+qdrant_data
+reports
+data/uploads
+evals/results
+
+# Not needed at runtime
+tests
+evals
+data/jds
+data/resumes
+Dockerfile
+docker-compose.yml
