@@ -1,0 +1,31 @@
+Senior Backend Engineer (Python)
+NimbusPay · Bengaluru, India (Hybrid) · Full-time · Experience: 5+ years
+
+About the role
+NimbusPay is hiring a Senior Backend Engineer to build the services behind our real-time payments platform. You will design high-throughput APIs, own services in production, and help us bring LLM-powered features into our risk and support workflows.
+
+Responsibilities
+- Design, build and operate Python microservices using FastAPI.
+- Model data and tune queries in PostgreSQL; use Redis for caching and rate limiting.
+- Build event-driven pipelines with Apache Kafka.
+- Deploy and run services on Kubernetes in AWS; manage infrastructure with Terraform.
+- Build LLM agent workflows with LangGraph / LangChain for internal automation.
+- Mentor junior engineers and lead design reviews.
+
+Required qualifications
+- 5+ years of professional backend development experience.
+- Strong Python skills, with production experience in FastAPI or Django.
+- Solid experience with PostgreSQL and Redis.
+- Hands-on experience with Docker and Kubernetes.
+- Experience with AWS (EC2, S3, RDS, EKS).
+- Experience with message brokers such as Kafka or RabbitMQ.
+- Good grasp of REST API design, testing (pytest) and CI/CD.
+
+Nice to have
+- Experience with LangGraph, LangChain or other LLM orchestration frameworks.
+- Terraform or other infrastructure-as-code tools.
+- Observability tools: Prometheus, Grafana, OpenTelemetry.
+- Background in fintech or payments.
+
+What we offer
+Competitive salary and ESOPs, hybrid work (3 days in office), health insurance for you and your family, and a yearly learning budget.

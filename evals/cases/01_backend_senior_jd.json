@@ -1,0 +1,30 @@
+{
+  "name": "3 yrs backend vs senior (5+ yrs) payments JD",
+  "resume": "data/resumes/resume.pdf",
+  "jd": "data/jds/jd.txt",
+  "expected": {
+    "resume_skills": [
+      "Python", "SQL", "JavaScript",
+      "Django", "Django REST Framework or DRF", "FastAPI", "Flask", "Celery",
+      "PostgreSQL", "MySQL", "MongoDB",
+      "AWS", "EC2", "S3", "Lambda or AWS Lambda", "RDS",
+      "Docker", "GitHub Actions", "Linux",
+      "LangChain", "OpenAI API or OpenAI", "pandas",
+      "pytest", "Git"
+    ],
+    "resume_optional_skills": [
+      "REST API design", "prompt engineering", "Agile/Scrum", "Agile", "Scrum", "unit testing", "CI/CD",
+      "TF-IDF", "cosine similarity", "Telegram", "Telegram Bot API", "ORM"
+    ],
+    "experience": [
+      {"start": "2023-07", "end": null},
+      {"start": "2022-04", "end": "2023-06"}
+    ],
+    "jd_required_skills": [
+      "Python", "FastAPI or Django", "PostgreSQL", "Redis", "Docker", "Kubernetes",
+      "AWS", "Kafka or RabbitMQ", "REST API design", "pytest", "CI/CD"
+    ],
+    "jd_optional_skills": ["EC2", "S3", "RDS", "EKS", "microservices", "testing"],
+    "jd_required_years": 5
+  }
+}

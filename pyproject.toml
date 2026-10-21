@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "langgraph-resume-parser"
+version = "0.1.0"
+description = "Screens a resume against a job description with a LangGraph workflow on Gemini"
+readme = "README.md"
+requires-python = ">=3.10"
+# Versions tested together; bump deliberately
+dependencies = [
+    "langgraph~=1.2.12",
+    "langgraph-checkpoint-sqlite~=3.1.1",
+    "langchain~=1.4.3",
+    "langchain-core~=1.6.5",
+    "langchain-google-genai~=4.4.0",
+    "pydantic~=2.13.5",
+    "pydantic-settings~=2.15.0",
+    "pypdf~=6.19.0",
+    "fastapi~=0.142.2",
+    "uvicorn~=0.54.0",
+    "python-multipart~=0.0.32",
+    "qdrant-client~=1.19.1",
+]
+
+[project.optional-dependencies]
+ui = [
+    "streamlit~=1.65.0",
+    "requests~=2.34.2",
+]
+dev = [
+    "langgraph-resume-parser[ui]",
+    "pytest~=9.1.1",
+    "httpx~=0.28.1",
+    "ruff~=0.16.10",
+]
+
+[project.scripts]
+resume-screener = "app.cli:main"
+resume-screener-ingest = "app.knowledge.ingest:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "N"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
