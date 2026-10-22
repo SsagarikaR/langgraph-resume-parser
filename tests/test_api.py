@@ -11,8 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import main
+from app.api.deps import get_service
 from app.api.main import create_app
-from app.api.routes.screenings import get_service
+from app.api.routes import health
 from app.core.config import get_settings
 from app.core.metrics import metrics
 from app.services.exceptions import (
@@ -584,8 +585,8 @@ def test_ready_reports_each_dependency(client, monkeypatch):
     class Service(StubService):
         repository = Repository()
 
-    monkeypatch.setattr(main, "get_service", Service)
-    monkeypatch.setattr(main.vector_store, "ping", lambda: None)
+    monkeypatch.setattr(health, "get_service", Service)
+    monkeypatch.setattr(health.vector_store, "ping", lambda: None)
     r = client.get("/ready")
     assert (r.status_code, r.json()) == (200, {"status": "ok", "checks": {"database": "ok", "guidelines": "ok"}})
 
@@ -600,8 +601,8 @@ def test_ready_is_503_without_the_database_but_not_without_guidelines(client, mo
     class Service(StubService):
         repository = Repository()
 
-    monkeypatch.setattr(main.vector_store, "ping", down)
-    monkeypatch.setattr(main, "get_service", lambda: Service())
+    monkeypatch.setattr(health.vector_store, "ping", down)
+    monkeypatch.setattr(health, "get_service", lambda: Service())
     r = client.get("/ready")
     assert r.status_code == 503
     assert r.json()["checks"] == {"database": "unavailable", "guidelines": "unavailable"}

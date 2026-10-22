@@ -1,14 +1,14 @@
 import asyncio
 import contextlib
 import logging
-from collections.abc import Callable
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Response
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
 from app.api.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER, require_api_key
+from app.api.deps import get_service
 from app.api.errors import handle_screening_error
 from app.api.middleware import (
     REQUEST_ID_HEADER,
@@ -17,17 +17,14 @@ from app.api.middleware import (
     add_security_headers,
     track_request,
 )
-from app.api.routes.screenings import get_service
+from app.api.routes.health import router as health_router
 from app.api.routes.screenings import router as screenings_router
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 from app.core.metrics import metrics
-from app.knowledge import vector_store
 from app.services.exceptions import ScreeningError
 
 logger = logging.getLogger(__name__)
-
-READY_TIMEOUT_SECONDS = 3.0
 
 
 async def purge_periodically(retention_days: int, interval_minutes: int) -> None:
@@ -75,21 +72,6 @@ async def lifespan(app: FastAPI):
             await purge  # let it finish unwinding before the app (and its DB) closes
 
 
-async def passes(check: Callable[[], object]) -> bool:
-    """Whether `check` (blocking I/O, so run off the event loop) succeeds within the time limit.
-    Failures are logged, not returned: /ready needs no key, so it says what is down, never why."""
-    try:
-        await asyncio.wait_for(asyncio.to_thread(check), READY_TIMEOUT_SECONDS)
-    except Exception:
-        logger.warning("Readiness check %s failed", getattr(check, "__qualname__", check), exc_info=True)
-        return False
-    return True
-
-
-def label(ok: bool) -> str:
-    return "ok" if ok else "unavailable"
-
-
 def create_app() -> FastAPI:
     # Reading settings here also fails fast at startup if required ones (API key) are missing
     settings = get_settings()
@@ -107,27 +89,9 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if docs else None,
     )
     api_prefix = settings.api_prefix
+    app.include_router(health_router)
     app.include_router(screenings_router, prefix=api_prefix)
     app.add_exception_handler(ScreeningError, handle_screening_error)  # type: ignore[arg-type]  # Starlette types handlers as taking Exception
-
-    # async: answered on the event loop, so it still responds while every worker thread is busy.
-    # Liveness only: the process is up. /ready says whether it can do its work.
-    @app.get("/health")
-    async def health():
-        return {"status": "ok"}
-
-    @app.get("/ready")
-    async def ready(response: Response):
-        """Readiness: the checkpoint database answers (required: every screening lives there) and
-        the guideline store answers (reported, not required: screenings run without guidelines)."""
-        database = await passes(lambda: get_service().repository.ping())
-        guidelines = await passes(vector_store.ping)
-        if not database:
-            response.status_code = 503
-        return {
-            "status": "ok" if database else "unavailable",
-            "checks": {"database": label(database), "guidelines": label(guidelines)},
-        }
 
     if settings.metrics_enabled:
         # Exposes request-rate/latency and LLM token usage: same key requirement as /screenings,
