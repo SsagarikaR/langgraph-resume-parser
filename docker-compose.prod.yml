@@ -1,0 +1,10 @@
+# Production override: run the images CI published, scanned and signed, instead of building from
+# source on the server. Use it through scripts/deploy.sh, which checks the signatures first:
+#   scripts/deploy.sh ghcr.io/<owner>/<repo>-api@sha256:<digest> ghcr.io/<owner>/<repo>-ui@sha256:<digest>
+services:
+  api:
+    image: ${API_IMAGE:?Set API_IMAGE to the published API image, pinned by digest}
+    build: !reset null
+  ui:
+    image: ${UI_IMAGE:?Set UI_IMAGE to the published UI image, pinned by digest}
+    build: !reset null
