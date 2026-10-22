@@ -29,6 +29,7 @@ CVE-2026-112900 exp:2027-01-31
 CVE-2026-112902 exp:2027-01-31
 # pip-audit draws from a different advisory DB (OSV/PyPA) than Trivy, with only partial overlap
 # in CVE coverage for the same pillow release; same justification as above.
+GHSA-78g4-xqwv-q3g8 exp:2027-01-31
 CVE-2026-112391 exp:2027-01-31
 CVE-2026-112396 exp:2027-01-31
 CVE-2026-112401 exp:2027-01-31
