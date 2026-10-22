@@ -1,0 +1,9 @@
+# Loads the dashboards in deploy/grafana/dashboards/ (mounted read-only): edit the JSON here, not in
+# the UI, so changes are reviewed and versioned like code.
+apiVersion: 1
+providers:
+  - name: resume-screener
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
