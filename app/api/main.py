@@ -4,11 +4,11 @@ import logging
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from app.api.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER
+from app.api.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER, require_api_key
 from app.api.errors import handle_screening_error
 from app.api.middleware import (
     REQUEST_ID_HEADER,
@@ -27,7 +27,7 @@ from app.services.exceptions import ScreeningError
 
 logger = logging.getLogger(__name__)
 
-API_PREFIX = ""  # no versioning prefix yet; add /v1 here when the UI is updated
+API_PREFIX = get_settings().api_prefix
 READY_TIMEOUT_SECONDS = 3.0
 
 
@@ -58,7 +58,10 @@ async def lifespan(app: FastAPI):
     if settings.credentials:
         logger.info("API keys: %s", ", ".join(sorted(settings.credentials)))  # names only, never keys
     else:
-        logger.warning("ALLOW_OPEN_API=true and no API key: /screenings is open to anyone who can reach this server")
+        logger.warning(
+            "ALLOW_OPEN_API=true and no API key: %s/screenings is open to anyone who can reach this server",
+            API_PREFIX,
+        )
 
     purge = None
     if settings.retention_days:
@@ -127,8 +130,11 @@ def create_app() -> FastAPI:
         }
 
     if settings.metrics_enabled:
+        # Exposes request-rate/latency and LLM token usage: same key requirement as /screenings,
+        # so it is not open reconnaissance surface whenever an API key is configured.
+        metrics_deps = [Depends(require_api_key)] if settings.credentials else []
 
-        @app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
+        @app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False, dependencies=metrics_deps)
         async def prometheus_metrics():
             return metrics.render()
 

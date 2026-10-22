@@ -18,6 +18,7 @@ KEY_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 KEY_HASH_PREFIX = "sha256:"
 KEY_HASH = re.compile(r"^sha256:[0-9a-fA-F]{64}$")
 SECRETS_DIR = Path("/run/secrets")
+MIN_PLAINTEXT_KEY_LENGTH = 32  # matches secrets.token_urlsafe(32), the documented way to generate one
 
 
 class Settings(BaseSettings):
@@ -73,6 +74,7 @@ class Settings(BaseSettings):
     api_key_expires: Annotated[dict[str, date], NoDecode] = {}  # name:YYYY-MM-DD expiry per key
     audit_keys: Annotated[list[str], NoDecode] = []  # read-only keys that see all screenings
     acting_user_keys: Annotated[list[str], NoDecode] = ["default"]  # keys allowed to send X-Acting-User
+    api_prefix: str = "/api/v1"  # version prefix for all /screenings routes
     api_docs: bool | None = None  # serve /docs; None = auto (on when no keys configured)
     cors_origins: Annotated[list[str], NoDecode] = []  # browser origins allowed to call the API
     rate_limit_enabled: bool = True
@@ -125,8 +127,15 @@ class Settings(BaseSettings):
                 raise ValueError("API_KEYS must be comma-separated name:key pairs; names use letters, digits, . _ -")
             if name in keys or key in keys.values():
                 raise ValueError(f"API_KEYS repeats the name or the key of '{name}': each must be unique")
-            if key.startswith(KEY_HASH_PREFIX) and not KEY_HASH.match(key):
-                raise ValueError(f"API_KEYS: the hashed key of '{name}' must be sha256: and 64 hex digits")
+            if key.startswith(KEY_HASH_PREFIX):
+                if not KEY_HASH.match(key):
+                    raise ValueError(f"API_KEYS: the hashed key of '{name}' must be sha256: and 64 hex digits")
+            elif len(key) < MIN_PLAINTEXT_KEY_LENGTH:
+                raise ValueError(
+                    f"API_KEYS: the key for '{name}' is too short ({len(key)} chars); "
+                    f'use at least {MIN_PLAINTEXT_KEY_LENGTH}, e.g. python -c "import secrets; '
+                    f'print(secrets.token_urlsafe(32))"'
+                )
             keys[name] = key
         return keys
 

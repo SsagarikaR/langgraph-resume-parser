@@ -1,92 +1,27 @@
-import json
-import os
+"""Streamlit UI for the screening API: start a screening, follow it live, review the questions."""
 
-import requests
+import json
+import re
+from typing import cast
+
 import streamlit as st
 
-API_URL = os.getenv("API_URL", "http://localhost:8000")
-TIMEOUT = 300  # LLM steps can take a while
+from ui.api_client import API_URL, api, api_is_up, md, run_with_progress
+from ui.login import LOGIN_REQUIRED, require_login, sign_out
+
 BREAKPOINT_NODES = ["match_requirements", "analyze_gaps", "generate_questions"]
-# What each workflow step is doing, shown while it runs
-STEP_LABELS = {
-    "validate_input": "Checking the inputs",
-    "parse_resume": "Reading the resume PDF",
-    "extract_resume": "Extracting resume details",
-    "analyze_job": "Analysing the job description",
-    "match_requirements": "Matching skills and experience",
-    "analyze_gaps": "Analysing gaps",
-    "generate_questions": "Looking up interview guidelines and drafting questions",
-    "human_review": "Recording your review",
-    "generate_report": "Writing the report",
-}
+THREAD_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")  # same rule as the API
 
 st.set_page_config(page_title="Resume Screening", page_icon="📄", layout="wide")
 
-
-# ---------------- API helpers ----------------
-def show_api_error(r: requests.Response) -> None:
-    detail = r.json().get("detail", r.text) if "json" in r.headers.get("content-type", "") else r.text
-    st.error(f"API error {r.status_code}: {detail}")
+# The signed-in reviewer, sent with each review for the audit trail (None without a login)
+USER = require_login()
 
 
-def api(method: str, path: str, **kwargs) -> dict | None:
-    try:
-        r = requests.request(method, f"{API_URL}{path}", timeout=TIMEOUT, **kwargs)
-    except requests.ConnectionError:
-        st.error(f"Cannot reach the API at {API_URL}. Is the server running?")
-        return None
-    if not r.ok:
-        show_api_error(r)
-        return None
-    return r.json()
-
-
-def run_with_progress(title: str, path: str, **kwargs) -> dict | None:
-    """POST to a workflow endpoint with ?stream=true and show each step live as the graph runs.
-
-    The API sends one JSON event per line: {"type": "step", ...} as each node starts and ends,
-    then {"type": "result", "screening": ...}, or {"type": "error", ...} if a step fails.
-    """
-    with st.status(title, expanded=True) as status:
-        try:
-            r = requests.post(f"{API_URL}{path}", params={"stream": "true"}, stream=True, timeout=TIMEOUT, **kwargs)
-        except requests.ConnectionError:
-            status.update(label="Cannot reach the API", state="error")
-            st.error(f"Cannot reach the API at {API_URL}. Is the server running?")
-            return None
-        with r:
-            if not r.ok:  # rejected before the workflow started (bad input, rate limit, …)
-                status.update(label="Request rejected", state="error")
-                show_api_error(r)
-                return None
-            for line in r.iter_lines():
-                if not line:
-                    continue
-                event = json.loads(line)
-                if event["type"] == "step":
-                    label = STEP_LABELS.get(event["node"], event["node"])
-                    if event["event"] == "started":
-                        status.update(label=f"{label}…")
-                    elif event["event"] == "finished":
-                        status.write(f"✅ {label}")
-                    else:  # interrupted: the graph paused for the reviewer
-                        status.write("⏸ Questions ready for your review")
-                elif event["type"] == "error":
-                    status.update(label="Workflow failed", state="error")
-                    st.error(f"API error {event['status']}: {event['detail']}")
-                    return None
-                elif event["type"] == "result":
-                    status.update(label="Done", state="complete", expanded=False)
-                    return event["screening"]
-        status.update(label="Connection closed before the workflow finished", state="error")
-        return None
-
-
-def api_is_up() -> bool:
-    try:
-        return requests.get(f"{API_URL}/health", timeout=3).ok
-    except requests.RequestException:
-        return False
+def reload(thread_id: str) -> None:
+    if data := api("GET", f"/screenings/{thread_id}"):
+        st.session_state.screening = data
+        st.rerun()
 
 
 # ---------------- Sidebar ----------------
@@ -97,13 +32,32 @@ with st.sidebar:
     else:
         st.error(f"API not reachable: {API_URL}")
         st.caption("Start it with: `uvicorn app.api:app --reload`")
+    if not LOGIN_REQUIRED:
+        st.caption("⚠️ UI_USERS / UI_PASSWORD is not set: anyone who can open this page can use it.")
+    elif USER:
+        st.caption(f"Signed in as **{md(USER)}**")
+        if st.button("Sign out", use_container_width=True):
+            sign_out()
+            st.rerun()
 
     st.divider()
     st.subheader("Open existing screening")
-    existing = st.text_input("Screening ID", placeholder="e.g. 3f9a1c2b7d10")
-    if st.button("Load", use_container_width=True) and existing.strip():
-        if data := api("GET", f"/screenings/{existing.strip()}"):
-            st.session_state.screening = data
+    existing = st.text_input("Screening ID", placeholder="e.g. 3f9a1c2b7d10").strip()
+    if st.button("Load", use_container_width=True) and existing:
+        if THREAD_ID.match(existing):
+            reload(existing)
+        else:
+            st.warning("A screening ID has only letters, digits, '-' and '_'.")
+
+    with st.expander("My recent screenings"):
+        listed = api("GET", "/screenings", params={"limit": 20}) if api_is_up() else None
+        recent = cast(list[dict], listed or [])  # this endpoint answers with a list
+        for item in recent:
+            label = f"{item['candidate'] or 'Candidate'} → {item['job_title'] or 'Role'} · {item['status']}"
+            if st.button(label, key=f"open-{item['thread_id']}", use_container_width=True):
+                reload(item["thread_id"])
+        if not recent:
+            st.caption("None yet.")
 
     if "screening" in st.session_state and st.button("Start a new screening", use_container_width=True):
         del st.session_state.screening
@@ -134,7 +88,8 @@ def new_screening_form():
         )
         breakpoints = st.multiselect("Pause after", BREAKPOINT_NODES)
 
-    if st.button("Run screening", type="primary", disabled=resume is None):
+    # The resume check is for the type checker; the button is disabled without one
+    if st.button("Run screening", type="primary", disabled=resume is None) and resume is not None:
         if not jd_text.strip() and jd_file is None:
             st.warning("Add a job description, either pasted or uploaded.")
             return
@@ -151,7 +106,7 @@ def new_screening_form():
 
 # ---------------- Results ----------------
 def show_overview(s: dict):
-    st.title(f"{s['candidate'] or 'Candidate'} → {s['job_title'] or 'Role'}")
+    st.title(f"{md(s['candidate'] or 'Candidate')} → {md(s['job_title'] or 'Role')}")
     st.caption(f"Screening ID: `{s['thread_id']}`")
 
     c1, c2, c3, c4 = st.columns(4)
@@ -167,15 +122,20 @@ def show_overview(s: dict):
     left, right = st.columns(2)
     with left:
         st.subheader("✅ Matching skills")
-        st.write(", ".join(s["matching_skills"]) or "None")
+        st.markdown(", ".join(md(skill) for skill in s["matching_skills"]) or "None")
     with right:
         st.subheader("❌ Missing skills")
-        st.write(", ".join(s["missing_skills"]) or "None")
+        st.markdown(", ".join(md(skill) for skill in s["missing_skills"]) or "None")
+    if s.get("unverified_skills"):
+        st.caption(
+            "⚠️ Listed by the model but not found in the resume text, so left out of the match: "
+            + ", ".join(md(skill) for skill in s["unverified_skills"])
+        )
 
     gap = s.get("gap_analysis")
     if gap:
-        with st.expander(f"Gap analysis — severity: **{gap['severity']}**", expanded=True):
-            st.write(gap["summary"])
+        with st.expander(f"Gap analysis — severity: **{md(gap['severity'])}**", expanded=True):
+            st.markdown(md(gap["summary"]))
             cols = st.columns(2)
             sections = [
                 ("Technical gaps", "technical_gaps"),
@@ -187,11 +147,12 @@ def show_overview(s: dict):
                 with cols[i % 2]:
                     st.markdown(f"**{title}**")
                     for item in gap.get(key, []):
-                        st.markdown(f"- {item}")
+                        st.markdown(f"- {md(item)}")
             st.markdown("**Improvement suggestions**")
             for item in gap.get("improvement_suggestions", []):
-                st.markdown(f"- {item}")
-    elif "analyze_gaps" in s["steps"] or s["status"] != "paused":
+                st.markdown(f"- {md(item)}")
+    elif "generate_questions" in s["steps"]:
+        # Questions without a gap analysis: the run took the strong-match route
         st.info("Strong match: gap analysis was skipped.")
 
 
@@ -200,9 +161,9 @@ def show_questions(questions: list[dict]):
     badge = {"easy": "🟢", "medium": "🟡", "hard": "🔴"}
     for i, q in enumerate(questions, 1):
         with st.container(border=True):
-            st.markdown(f"**{i}. {q['question']}**")
-            st.caption(f"{badge.get(q['difficulty'], '')} {q['difficulty']} · {q['type']} · {q['topic']}")
-            st.markdown(f"*Why asked:* {q['why_asked']}")
+            st.markdown(f"**{i}. {md(q['question'])}**")
+            st.caption(f"{badge.get(q['difficulty'], '')} {md(q['difficulty'])} · {md(q['type'])} · {md(q['topic'])}")
+            st.markdown(f"*Why asked:* {md(q['why_asked'])}")
 
 
 def review_form(s: dict):
@@ -210,16 +171,26 @@ def review_form(s: dict):
     feedback = st.text_area(
         "Feedback (required to request a revision)", placeholder="e.g. Add more questions on Kafka and system design"
     )
+    can_revise = s["revisions_remaining"] > 0
+    if not can_revise:
+        st.info("Revisions are turned off on this server: approve the questions to write the report.")
+    elif s["revisions_remaining"] == 1:
+        st.info(
+            "This is the last revision: if you request one, the questions are revised with your "
+            "feedback and go straight into the report, without another review."
+        )
     approve_col, revise_col = st.columns(2)
     decision = None
     if approve_col.button("Approve questions", type="primary", use_container_width=True):
         decision = {"action": "approve"}
-    if revise_col.button("Request revision", use_container_width=True):
+    if revise_col.button("Request revision", use_container_width=True, disabled=not can_revise):
         if not feedback.strip():
             st.warning("Write some feedback so the questions can be improved.")
         else:
             decision = {"action": "revise", "feedback": feedback}
     if decision:
+        if USER:
+            decision["reviewer"] = USER  # recorded in the screening's audit trail
         data = run_with_progress("Updating…", f"/screenings/{s['thread_id']}/review", json=decision)
         if data:
             st.session_state.screening = data
@@ -258,7 +229,12 @@ def show_screening(s: dict):
     show_overview(s)
     st.divider()
 
-    if s["status"] == "paused":
+    if s["status"] == "running":
+        st.info("⏳ This screening is still running on the server. Refresh to see its progress.")
+        if st.button("Refresh", type="primary"):
+            reload(s["thread_id"])
+
+    elif s["status"] == "paused":
         breakpoint_form(s)
 
     elif s["status"] == "awaiting_review":
@@ -267,13 +243,26 @@ def show_screening(s: dict):
         st.divider()
         review_form(s)
 
+    elif s["status"] == "stopped":
+        st.warning(
+            "⏹ The run stopped before finishing (the connection was lost or the server restarted). "
+            "Continue it from the last completed step."
+        )
+        if st.button("Continue ▶", type="primary"):
+            data = run_with_progress("Continuing…", f"/screenings/{s['thread_id']}/continue", json={})
+            if data:
+                st.session_state.screening = data
+                st.rerun()
+
     elif s["status"] == "completed":
         if s["approved"]:
-            st.success(f"✅ Approved after {s['revision_count']} revision(s). Report saved to `{s['report_path']}`.")
+            approver = s["reviews"][-1].get("reviewer") if s["reviews"] else None
+            by = f" by {md(approver)}" if approver else ""
+            st.success(f"✅ Approved{by} after {s['revision_count']} revision(s).")
         else:
             st.warning(
-                f"Finished without approval after {s['revision_count']} revisions "
-                f"(revision limit reached). Report saved to `{s['report_path']}`."
+                f"Finished without approval: the revision limit was reached after {s['revision_count']} "
+                "revisions. The last feedback was applied to the questions below."
             )
         st.download_button(
             "Download report (JSON)",
@@ -284,10 +273,39 @@ def show_screening(s: dict):
         show_questions(s["interview_questions"])
 
     else:
-        st.error("This screening stopped before finishing. Start a new one.")
+        st.error(
+            "A step failed (for example, the LLM provider was unavailable; see the API logs). "
+            "Retry it: the completed steps are kept."
+        )
+        if st.button("Retry ▶", type="primary"):
+            data = run_with_progress("Retrying…", f"/screenings/{s['thread_id']}/continue", json={})
+            if data:
+                st.session_state.screening = data
+                st.rerun()
 
     with st.expander("Workflow steps"):
         st.write(" → ".join(s["steps"]))
+
+    if s["reviews"]:
+        with st.expander("Review history"):
+            for r in s["reviews"]:
+                who = md(r.get("reviewer") or "unnamed reviewer")
+                if r.get("reviewer") and not r.get("reviewer_verified"):
+                    who += " (name not verified)"
+                via = f" via {md(r['client'])}" if r.get("client") and r.get("client") != r.get("reviewer") else ""
+                line = f"- **{md(r['action'])}** by {who}{via} at {md(r['at'])}"
+                if r.get("feedback"):
+                    line += f": {md(r['feedback'])}"
+                st.markdown(line)
+
+    with st.expander("🗑 Delete this screening"):
+        st.caption("Erases the stored resume text, report and workflow state. This cannot be undone.")
+        if (
+            st.button("Delete permanently", type="primary")
+            and api("DELETE", f"/screenings/{s['thread_id']}") is not None
+        ):
+            del st.session_state.screening
+            st.rerun()
 
 
 if "screening" in st.session_state:
