@@ -187,7 +187,7 @@ class ScreeningService:
             self._require_status(thread_id, ("awaiting_review",), caller)
             logger.info("Screening %s: %s by %s", thread_id, action, decision["reviewer"] or "unnamed reviewer")
 
-        return self._stream(Command(resume=decision), thread_id, view["breakpoints"], before)
+        return self._stream(Command(resume=decision), thread_id, view["breakpoints"], before, caller=caller)
 
     def continue_run(self, thread_id: str, matching_skills: list[str] | None = None, caller: str | None = None) -> dict:
         """Resume a run stopped at a breakpoint, cut off part-way or failed in a step, optionally

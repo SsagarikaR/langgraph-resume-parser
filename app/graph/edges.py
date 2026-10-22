@@ -8,7 +8,7 @@ def route_after_matching(state: ResumeState) -> Literal["strong_match", "weak_ma
     settings = get_settings()
     if (
         state["match_percentage"] >= settings.match_threshold
-        and state["experience_gap_years"] <= settings.experience_tolerance_years
+        and state.get("experience_gap_years", 0) <= settings.experience_tolerance_years
     ):
         return "strong_match"
     return "weak_match"

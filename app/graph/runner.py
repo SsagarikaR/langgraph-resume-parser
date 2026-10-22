@@ -30,4 +30,4 @@ class WorkflowRunner:
             if "result" not in task:  # task start events carry the input, end events the result
                 yield "started", task["name"]
             else:
-                yield ("interrupted" if task["interrupts"] else "finished"), task["name"]
+                yield ("interrupted" if task.get("interrupts") else "finished"), task["name"]

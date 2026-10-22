@@ -277,7 +277,7 @@ def test_a_review_names_the_person_the_client_acts_for():
     calls = []
     service = make_service(repo)
     service._require_status = lambda *a: {"breakpoints": []}  # type: ignore[method-assign]
-    service._stream = lambda graph_input, *a: calls.append(graph_input.resume)  # type: ignore[method-assign]
+    service._stream = lambda graph_input, *a, **kw: calls.append(graph_input.resume)  # type: ignore[method-assign]
     service.review_stream("t1", "approve", caller="ui/alice")
     assert calls == [
         {"action": "approve", "feedback": "", "reviewer": "alice", "reviewer_verified": True, "client": "ui"}
@@ -337,7 +337,7 @@ def test_an_authenticated_person_cannot_review_as_someone_else():
     calls = []
     service = make_service(repo)
     service._require_status = lambda *a: {"breakpoints": []}  # type: ignore[method-assign]
-    service._stream = lambda graph_input, *a: calls.append(graph_input.resume)  # type: ignore[method-assign]
+    service._stream = lambda graph_input, *a, **kw: calls.append(graph_input.resume)  # type: ignore[method-assign]
     service.review_stream("t1", "approve", reviewer="bob", caller="ui/alice")
     service.review_stream("t1", "approve", reviewer="Bob Smith", caller="ui")  # shared login: typed name
     # The key vouches for alice; a name typed at the shared login is recorded as a claim only
