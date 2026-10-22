@@ -229,6 +229,13 @@ Resumes are personal data, so the app keeps as little as it can, for as short a 
   turned on). Check that your Gemini terms cover personal data before screening real candidates: on
   the free tier, Google may use prompts to improve its products, and candidates may need to be told
   their data is processed this way.
+- **Tracing**: `LANGSMITH_TRACING=true` sends full prompt/response content (resume text, extracted
+  PII) to LangSmith by default, outside this app's own retention and erasure controls — deleting a
+  screening here does not delete its trace there. `LANGSMITH_HIDE_INPUTS=true` and
+  `LANGSMITH_HIDE_OUTPUTS=true` (set by default in `.env.example`) strip that content from every
+  trace while still showing run name, status, latency, token counts and cost, which is enough to
+  debug or review runs without exposing candidate data. Only disable these if you specifically need
+  to inspect prompt/response content for debugging, and even then prefer doing so on synthetic data.
 - **Backups** (`scripts/backup.sh`, see Docker) hold resume text too: they are encrypted with
   [age](https://age-encryption.org) to `BACKUP_AGE_RECIPIENT` (a public key, so the server cannot read
   them back), `0600`, and the script deletes those older than `KEEP_DAYS` (default 30). Deleting a
