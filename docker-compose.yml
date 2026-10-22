@@ -1,42 +1,144 @@
-services:
-  api:
-    build:
-      context: .
-      target: api
-    env_file: .env
-    environment:
-      # Overrides .env: use the Qdrant service instead of local file mode
-      QDRANT_URL: http://qdrant:6333
-    ports:
-      - "8000:8000"
-    volumes:
-      - screener-data:/var/lib/screener
-    depends_on:
-      qdrant:
-        condition: service_started
-    restart: unless-stopped
+# Every service runs hardened: no Linux capabilities beyond what it needs, no privilege gain via
+# setuid binaries, and (where the app allows) a read-only root filesystem with writable state only
+# in volumes and /tmp.
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
 
-  ui:
-    build:
-      context: .
-      target: ui
+services:
+  # The only service published on the host: HTTPS for the UI (/) and the API (/api/). The API key,
+  # UI passwords and resume data never cross the network in plain text. See deploy/Caddyfile.
+  proxy:
+    <<: *hardening
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    cap_add: [NET_BIND_SERVICE] # ports 80 and 443
+    read_only: true
+    tmpfs: [/tmp]
     environment:
-      API_URL: http://api:8000
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost} # a public domain name gets a Let's Encrypt certificate
     ports:
-      - "8501:8501"
+      - "80:80" # redirects to HTTPS (and answers ACME challenges)
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # certificates
+      - caddy-config:/config
+    networks:
+      backend:
+        # Fixed, so the API trusts forwarded client addresses from the proxy and nobody else
+        ipv4_address: ${PROXY_IP:-172.30.240.10}
     depends_on:
       api:
         condition: service_healthy
-    restart: unless-stopped
+      ui:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
+  api:
+    <<: *hardening
+    build:
+      context: .
+      target: api
+    read_only: true
+    tmpfs: [/tmp] # uploads are spooled here while a request is parsed
+    env_file: .env
+    environment:
+      # .env also holds the UI's secrets: blank them, so the API process never has the UI's logins
+      UI_USERS: ""
+      UI_PASSWORD: ""
+      # These override .env, which may hold host paths (e.g. CHECKPOINT_DB=checkpoints.db from
+      # .env.example) that the non-root user cannot write inside the image. State goes in the volume.
+      QDRANT_URL: http://qdrant:6333 # the Qdrant service instead of local file mode
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env (see .env.example)}
+      CHECKPOINT_DB: /var/lib/screener/checkpoints.db
+      REPORTS_DIR: /var/lib/screener/reports
+      UPLOADS_DIR: /var/lib/screener/uploads
+      QDRANT_PATH: /var/lib/screener/qdrant_data
+      # The stack is reachable from the network, so it never runs without authentication
+      API_KEY: ${API_KEY:?Set API_KEY in .env (see .env.example)}
+      # uvicorn takes the client address from X-Forwarded-For only on requests from the proxy, so
+      # rate limits and logs see each real client and no other container can claim another address
+      FORWARDED_ALLOW_IPS: ${PROXY_IP:-172.30.240.10}
+    expose:
+      - "8000"
+    healthcheck:
+      # Ready, not just alive: the proxy waits until the API can reach its database
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+    volumes:
+      - screener-data:/var/lib/screener
+    networks: [backend]
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "2", memory: 2G }
+
+  ui:
+    <<: *hardening
+    build:
+      context: .
+      target: ui
+    read_only: true
+    tmpfs: [/tmp, /app/.streamlit]
+    environment:
+      API_URL: http://api:8000
+      API_KEY: ${API_KEY:?Set API_KEY in .env (see .env.example)} # same key as the API
+      # The UI holds the API key, so it is reachable only with its own login: UI_USERS (one per
+      # reviewer, each seeing only their own screenings) or UI_PASSWORD (one shared login). With
+      # neither, UI_REQUIRE_LOGIN makes the page refuse to serve rather than run open.
+      UI_USERS: ${UI_USERS:-}
+      UI_PASSWORD: ${UI_PASSWORD:-}
+      UI_REQUIRE_LOGIN: "true" # also requires the passwords to be scrypt hashes
+      UI_SESSION_TIMEOUT_MINUTES: ${UI_SESSION_TIMEOUT_MINUTES:-30}
+      UI_BEHIND_PROXY: "true" # the sign-in lockout reads the client address the proxy forwards
+    expose:
+      - "8501"
+    networks: [backend]
+    depends_on:
+      api:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1G }
 
   qdrant:
-    image: qdrant/qdrant:v1.19.2-unprivileged # matches qdrant-client ~=1.19; runs as non-root
-    ports:
-      - "6333:6333"
+    <<: *hardening
+    image: qdrant/qdrant:v1.19.2-unprivileged@sha256:efb96a9425a90d2d5a1a0a474156280df1892dcdf1af3e8515bd2589b1bfd88b
+    # Not published to the host, and it requires the API key even on the compose network. For the
+    # dashboard, temporarily add ports: ["127.0.0.1:6333:6333"].
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env (see .env.example)}
     volumes:
       - qdrant-data:/qdrant/storage
-    restart: unless-stopped
+    networks: [backend]
+    healthcheck:
+      # The image has no curl or wget; bash can open the port itself
+      test: ["CMD", "bash", "-c", ":> /dev/tcp/127.0.0.1/6333"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 1G }
+
+networks:
+  backend:
+    ipam:
+      # If it clashes with a network on the host, set COMPOSE_SUBNET and a PROXY_IP inside it in .env
+      config: [{ subnet: "${COMPOSE_SUBNET:-172.30.240.0/24}" }]
 
 volumes:
   screener-data:
   qdrant-data:
+  caddy-data:
+  caddy-config:

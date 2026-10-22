@@ -52,7 +52,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
 # One worker: the SQLite checkpointer and in-memory rate limits are per process.
-# Behind a reverse proxy, add --forwarded-allow-ips=<proxy IP> so rate limits see real client IPs.
+# Behind a reverse proxy, set FORWARDED_ALLOW_IPS (read by uvicorn) to the proxy's address so
+# rate limits see real client IPs; docker-compose.yml does this for its proxy.
 CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ---- UI image (only Streamlit + requests; talks to the API over HTTP) ----
