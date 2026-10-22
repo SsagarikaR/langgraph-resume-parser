@@ -27,7 +27,6 @@ from app.services.exceptions import ScreeningError
 
 logger = logging.getLogger(__name__)
 
-API_PREFIX = get_settings().api_prefix
 READY_TIMEOUT_SECONDS = 3.0
 
 
@@ -60,7 +59,7 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning(
             "ALLOW_OPEN_API=true and no API key: %s/screenings is open to anyone who can reach this server",
-            API_PREFIX,
+            settings.api_prefix,
         )
 
     purge = None
@@ -107,7 +106,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs else None,
         openapi_url="/openapi.json" if docs else None,
     )
-    app.include_router(screenings_router, prefix=API_PREFIX)
+    api_prefix = settings.api_prefix
+    app.include_router(screenings_router, prefix=api_prefix)
     app.add_exception_handler(ScreeningError, handle_screening_error)  # type: ignore[arg-type]  # Starlette types handlers as taking Exception
 
     # async: answered on the event loop, so it still responds while every worker thread is busy.
@@ -142,7 +142,7 @@ def create_app() -> FastAPI:
     # CORS headers and the browser can show them, and every response gets the security headers
     # and a request id. The guard (rate limit + API key) and the body limit run before any body is read.
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=lambda: get_settings().max_request_bytes)
-    app.add_middleware(ScreeningsGuardMiddleware, prefix=API_PREFIX + screenings_router.prefix)
+    app.add_middleware(ScreeningsGuardMiddleware, prefix=api_prefix + screenings_router.prefix)
     app.middleware("http")(add_security_headers)
     app.middleware("http")(track_request)
     if settings.cors_origins:

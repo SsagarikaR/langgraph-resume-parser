@@ -131,6 +131,7 @@ class ScreeningService:
             thread_id,
             breakpoints,
             before,
+            caller=caller,
         )
 
     def list_screenings(self, caller: str | None = None, limit: int = 50) -> list[dict]:
@@ -210,7 +211,7 @@ class ScreeningService:
                 self.repository.update_state(thread_id, update, as_node="match_requirements")
 
         # Input None = "carry on from the saved checkpoint"
-        return self._stream(None, thread_id, view["breakpoints"], before)
+        return self._stream(None, thread_id, view["breakpoints"], before, caller=caller)
 
     def delete(self, thread_id: str, caller: str | None = None) -> None:
         """Erase a screening and everything stored for it (resume text, report, uploads)."""
@@ -278,7 +279,12 @@ class ScreeningService:
         return view
 
     def _stream(
-        self, graph_input, thread_id: str, breakpoints: list[str], before: Callable[[], object] | None = None
+        self,
+        graph_input,
+        thread_id: str,
+        breakpoints: list[str],
+        before: Callable[[], object] | None = None,
+        caller: str | None = None,
     ) -> Iterator[dict]:
         """Take the screening and a run slot, then return the run's events. `before` runs first
         under the hold, to re-check the status the caller saw: another request may have run it in
@@ -290,9 +296,17 @@ class ScreeningService:
         except BaseException:
             hold.close()
             raise
-        return HeldRun(self._run(graph_input, thread_id, breakpoints, hold), hold)
+        return HeldRun(self._run(graph_input, thread_id, breakpoints, hold, caller=caller), hold)
 
-    def _run(self, graph_input, thread_id: str, breakpoints: list[str], hold: ExitStack) -> Generator[dict, None, None]:
+    def _run(
+        self,
+        graph_input,
+        thread_id: str,
+        breakpoints: list[str],
+        hold: ExitStack,
+        *,
+        caller: str | None = None,
+    ) -> Generator[dict, None, None]:
         with hold:
             stats = RunStats(thread_id)
             self.repository.save_summary(thread_id, None)  # stale until this run ends
@@ -324,7 +338,7 @@ class ScreeningService:
                 ) from e
             finally:
                 self.token_budget.charge(stats.finish(outcome))
-            screening = self._view(thread_id)
+            screening = self._view(thread_id, caller)
             self.repository.save_summary(thread_id, summary_of(screening))
         # Released before the last event: a caller that stops reading at the result
         # must not keep the screening held

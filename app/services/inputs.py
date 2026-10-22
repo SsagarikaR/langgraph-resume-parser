@@ -64,7 +64,7 @@ def read_job_description(jd_text: str | None, jd_filename: str | None, jd_bytes:
 
 def skill_match_update(values: dict, matching_skills: list[str]) -> dict:
     """The corrected match_requirements output for the reviewer's list of matching skills."""
-    if values["steps"][-1] != "match_requirements":
+    if "match_requirements" not in values["steps"]:
         raise InvalidScreeningInputError("Skills can only be edited at the match_requirements breakpoint")
     required = values["job"]["required_skills"]
     unknown = set(matching_skills) - set(required)

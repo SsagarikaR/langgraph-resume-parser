@@ -37,6 +37,10 @@ def test_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("QDRANT_PATH", str(tmp_path / "qdrant"))
     monkeypatch.setenv("MAX_UPLOAD_MB", "1")
     monkeypatch.setenv("RETENTION_DAYS", "0")  # no background purge task in API tests
+    monkeypatch.setenv("API_PREFIX", "")  # tests call /screenings directly, no versioning prefix
+    # Override any real credentials from .env so tests that call without a key get open-API behaviour
+    monkeypatch.setenv("API_KEY", "")
+    monkeypatch.setenv("API_KEYS", "")
     get_settings.cache_clear()
     api_rate_limit.reset()
     workflow_rate_limit.reset()

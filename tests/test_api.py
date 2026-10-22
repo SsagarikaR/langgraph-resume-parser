@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api import main
-from app.api.main import app, create_app
+from app.api.main import create_app
 from app.api.routes.screenings import get_service
 from app.core.config import get_settings
 from app.core.metrics import metrics
@@ -56,11 +56,17 @@ def ndjson_lines(response) -> list[dict]:
 
 
 @pytest.fixture
-def client():
-    app.dependency_overrides[get_service] = StubService
-    with TestClient(app) as c:
+def test_app():
+    """A fresh FastAPI app built with the test settings (API_PREFIX="", no real API keys).
+    Tests that override dependency_overrides must use this fixture, not the module-level `app`."""
+    return create_app()
+
+
+@pytest.fixture
+def client(test_app):
+    test_app.dependency_overrides[get_service] = StubService
+    with TestClient(test_app) as c:
         yield c
-    app.dependency_overrides.clear()
 
 
 def test_health(client):
@@ -126,24 +132,24 @@ def test_security_headers(client):
     assert headers["Cache-Control"] == "no-store"  # responses carry resume data
 
 
-def test_delete_screening(client):
+def test_delete_screening(client, test_app):
     deleted = []
 
     class DeletingService(StubService):
         def delete(self, thread_id, caller=None):
             deleted.append(thread_id)
 
-    app.dependency_overrides[get_service] = DeletingService
+    test_app.dependency_overrides[get_service] = DeletingService
     assert client.delete("/screenings/abc").status_code == 204
     assert deleted == ["abc"]
 
 
-def test_busy_screening_is_409(client):
+def test_busy_screening_is_409(client, test_app):
     class BusyService(StubService):
         def delete(self, thread_id, caller=None):
             raise ScreeningBusyError(f"Screening {thread_id} is busy with another request; try again shortly")
 
-    app.dependency_overrides[get_service] = BusyService
+    test_app.dependency_overrides[get_service] = BusyService
     assert client.delete("/screenings/abc").status_code == 409
 
 
@@ -183,8 +189,8 @@ def test_api_is_open_when_no_key_is_configured(client):
     assert client.get("/screenings/abc").status_code == 404
 
 
-def test_stream_returns_progress_then_result(client):
-    app.dependency_overrides[get_service] = StreamingStubService
+def test_stream_returns_progress_then_result(client, test_app):
+    test_app.dependency_overrides[get_service] = StreamingStubService
     r = client.post("/screenings?stream=true", files=PDF_UPLOAD, data=JD_FORM)
     assert r.headers["content-type"].startswith("application/x-ndjson")
     events = ndjson_lines(r)
@@ -193,14 +199,14 @@ def test_stream_returns_progress_then_result(client):
     assert events[-1]["screening"]["matching_skills"] == []  # validated against ScreeningResponse
 
 
-def test_without_stream_the_same_run_returns_plain_json(client):
-    app.dependency_overrides[get_service] = StreamingStubService
+def test_without_stream_the_same_run_returns_plain_json(client, test_app):
+    test_app.dependency_overrides[get_service] = StreamingStubService
     r = client.post("/screenings", files=PDF_UPLOAD, data=JD_FORM)
     assert r.json()["status"] == "awaiting_review"
 
 
-def test_failure_after_streaming_started_is_an_error_event(client):
-    app.dependency_overrides[get_service] = lambda: StreamingStubService(fail_mid_stream=True)
+def test_failure_after_streaming_started_is_an_error_event(client, test_app):
+    test_app.dependency_overrides[get_service] = lambda: StreamingStubService(fail_mid_stream=True)
     r = client.post("/screenings?stream=true", files=PDF_UPLOAD, data=JD_FORM)
     assert r.status_code == 200  # already sent with the first event
     assert ndjson_lines(r)[-1] == {
@@ -253,12 +259,12 @@ def test_bad_api_keys_are_rate_limited(client, monkeypatch):
     assert [client.get("/screenings/abc", headers=wrong).status_code for _ in range(3)] == [401, 401, 429]
 
 
-def test_responses_never_include_server_paths(client):
+def test_responses_never_include_server_paths(client, test_app):
     class CompletedService(StubService):
         def get(self, thread_id, caller=None):
             return {"thread_id": thread_id, "status": "completed", "report_path": "/var/lib/screener/reports/abc.json"}
 
-    app.dependency_overrides[get_service] = CompletedService
+    test_app.dependency_overrides[get_service] = CompletedService
     assert "report_path" not in client.get("/screenings/abc").json()
 
 
@@ -281,9 +287,9 @@ class RecordingService(StubService):
 
 
 @pytest.fixture
-def recording(client):
+def recording(client, test_app):
     RecordingService.calls = []
-    app.dependency_overrides[get_service] = RecordingService
+    test_app.dependency_overrides[get_service] = RecordingService
     return RecordingService.calls
 
 
@@ -394,12 +400,12 @@ def test_list_screenings(client, recording):
     assert client.get("/screenings?limit=500").status_code == 422
 
 
-def test_server_busy_is_503_with_retry_after(client):
+def test_server_busy_is_503_with_retry_after(client, test_app):
     class FullService(StubService):
         def get(self, thread_id, caller=None):
             raise ServerBusyError("The server is running as many screenings as it allows")
 
-    app.dependency_overrides[get_service] = FullService
+    test_app.dependency_overrides[get_service] = FullService
     r = client.get("/screenings/abc")
     assert r.status_code == 503
     assert int(r.headers["Retry-After"]) > 0
@@ -458,13 +464,13 @@ def test_unknown_http_methods_share_one_metric_label(client):
     assert 'http_requests_total{method="other",status="405"} 3' in body
 
 
-def test_a_busy_server_refuses_a_streamed_run_with_503_not_an_error_event(client):
+def test_a_busy_server_refuses_a_streamed_run_with_503_not_an_error_event(client, test_app):
     class FullService(StubService):
         def start_stream(self, **kwargs):
             # The real service takes its run slot before returning the stream, so it raises here
             raise ServerBusyError("The server is running as many screenings as it allows")
 
-    app.dependency_overrides[get_service] = FullService
+    test_app.dependency_overrides[get_service] = FullService
     r = client.post("/screenings?stream=true", files=PDF_UPLOAD, data=JD_FORM)
     assert r.status_code == 503
     assert int(r.headers["Retry-After"]) > 0
@@ -632,10 +638,10 @@ def test_only_trusted_keys_may_name_the_person_they_act_for(client, recording, m
     assert recording == [("get", "alice")]
 
 
-def test_the_workflow_limit_is_applied_before_the_upload_is_read(client, monkeypatch):
+def test_the_workflow_limit_is_applied_before_the_upload_is_read(client, test_app, monkeypatch):
     monkeypatch.setenv("WORKFLOW_RATE_LIMIT_PER_MINUTE", "1")
     get_settings.cache_clear()
-    app.dependency_overrides[get_service] = StreamingStubService
+    test_app.dependency_overrides[get_service] = StreamingStubService
     assert client.post("/screenings", files=PDF_UPLOAD, data=JD_FORM).status_code == 200
     seen = []
     original = main.ScreeningsGuardMiddleware.__call__
@@ -668,19 +674,22 @@ def test_each_key_has_a_daily_workflow_quota(client, recording, monkeypatch):
     assert "per day" in r.json()["detail"]
 
 
-def test_an_unhandled_error_is_counted_and_logged_as_500(monkeypatch, caplog):
+def test_an_unhandled_error_is_counted_and_logged_as_500(test_app, monkeypatch, caplog):
     class BrokenService(StubService):
         def get(self, thread_id, caller=None):
             raise RuntimeError("bug")
 
     metrics.reset()
-    app.dependency_overrides[get_service] = BrokenService
+    test_app.dependency_overrides[get_service] = BrokenService
     try:
-        with TestClient(app, raise_server_exceptions=False) as c, caplog.at_level(logging.INFO, "app.api.middleware"):
+        with (
+            TestClient(test_app, raise_server_exceptions=False) as c,
+            caplog.at_level(logging.INFO, "app.api.middleware"),
+        ):
             assert c.get("/screenings/abc").status_code == 500
             body = c.get("/metrics").text
     finally:
-        app.dependency_overrides.clear()
+        test_app.dependency_overrides.clear()
     assert 'http_requests_total{method="GET",status="500"} 1' in body
     assert "/screenings/abc -> 500" in caplog.text
 
