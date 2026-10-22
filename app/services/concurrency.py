@@ -20,12 +20,14 @@ class RunGuard:
     """Holds screenings and run slots for the requests that run or delete them."""
 
     def __init__(self, max_concurrent_runs: int):
+        # Set up the busy-screening tracker and the fixed-size run-slot counter.
         self._busy: set[str] = set()  # thread ids with a run or delete in progress
         self._busy_lock = threading.Lock()
         self._run_slots = threading.BoundedSemaphore(max_concurrent_runs)
 
     @contextmanager
     def exclusive(self, thread_id: str):
+        # Lock this specific screening so no second request can touch it at the same time.
         """Hold the screening for one run or delete; ScreeningBusyError if another has it."""
         with self._busy_lock:
             if thread_id in self._busy:
@@ -39,6 +41,7 @@ class RunGuard:
 
     @contextmanager
     def run_slot(self):
+        # Grab one of the N server-wide workflow slots; reject immediately if all are in use.
         """Hold one of the server's workflow slots; ServerBusyError if all are taken."""
         if not self._run_slots.acquire(blocking=False):
             raise ServerBusyError("The server is running as many screenings as it allows; try again shortly")
@@ -50,6 +53,7 @@ class RunGuard:
             self._run_slots.release()
 
     def hold(self, thread_id: str) -> ExitStack:
+        # Acquire both locks together; if the screening is busy, give the slot back before raising.
         """A run slot and the screening, taken now; close the stack to release both."""
         hold = ExitStack()
         try:
@@ -61,6 +65,7 @@ class RunGuard:
         return hold
 
     def is_held(self, thread_id: str) -> bool:
+        # Quick read-only check: is this screening currently locked by any request?
         """Whether a request is running (or deleting) the screening right now."""
         with self._busy_lock:
             return thread_id in self._busy
@@ -75,14 +80,17 @@ class HeldRun(Iterator[dict]):
     """
 
     def __init__(self, events: Generator[dict, None, None], hold: ExitStack):
+        # Store the event stream and the lock bundle; closed flag prevents double-release.
         self._events = events
         self._hold = hold
         self._closed = False
 
     def __next__(self) -> dict:
+        # Fetch the next event from the LangGraph stream; StopIteration signals the run is done.
         return next(self._events)
 
     def close(self) -> None:
+        # Stop the generator and release both locks; safe to call multiple times.
         """Release the hold. Every caller closes the stream (final_view, the API's ndjson), so
         this happens at a known point; __del__ is only the safety net."""
         if self._closed:
@@ -94,6 +102,7 @@ class HeldRun(Iterator[dict]):
             self._hold.close()
 
     def __del__(self) -> None:
+        # Last-resort cleanup if the stream was garbage-collected without close() being called.
         if not self._closed:
             logger.warning("A screening stream was dropped without being closed; releasing its hold")
             self.close()
