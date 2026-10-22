@@ -1,0 +1,24 @@
+{
+  "name": "1.5 yrs junior frontend vs senior (5+ yrs) backend JD: weak match",
+  "resume": "data/resumes/frontend_junior.pdf",
+  "jd": "data/jds/jd.txt",
+  "expected": {
+    "resume_skills": [
+      "JavaScript", "TypeScript", "HTML", "CSS",
+      "React", "Redux", "Tailwind CSS",
+      "Jest", "Git", "Webpack"
+    ],
+    "resume_optional_skills": ["Figma", "unit testing", "responsive design", "public APIs", "REST API"],
+    "experience": [
+      {"start": "2024-01", "end": null},
+      {"start": "2023-06", "end": "2023-12"}
+    ],
+    "jd_required_skills": [
+      "Python", "FastAPI or Django", "PostgreSQL", "Redis", "Docker", "Kubernetes",
+      "AWS", "Kafka or RabbitMQ", "REST API design", "pytest", "CI/CD"
+    ],
+    "jd_optional_skills": ["EC2", "S3", "RDS", "EKS", "microservices", "testing"],
+    "jd_required_years": 5,
+    "route": "weak_match"
+  }
+}

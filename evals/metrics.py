@@ -93,3 +93,19 @@ def mean_absolute_error(errors: Iterable[float]) -> float:
 def accuracy(results: Iterable[bool]) -> float:
     results = list(results)
     return sum(results) / len(results) if results else 0.0
+
+
+def skill_names(skills: Iterable[str]) -> frozenset[str]:
+    """Every normalized name the skills can match by."""
+    return frozenset().union(*(variants(s) for s in skills))
+
+
+def forbidden_found(predicted: Iterable[str], forbidden: Iterable[str]) -> list[str]:
+    """The `forbidden` skills that appear among `predicted`, compared by normalized name."""
+    names = skill_names(predicted)
+    return [skill for skill in forbidden if variants(skill) & names]
+
+
+def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    """Overlap of two skill sets: 1.0 when identical (or both empty)."""
+    return len(a & b) / len(a | b) if a | b else 1.0

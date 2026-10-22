@@ -1,0 +1,24 @@
+{
+  "name": "ML engineer with an overlapping freelance role vs an ML platform JD that states no years: abbreviations (ML, NLP, LLMs, k8s) and overlap counted once",
+  "resume": "data/resumes/ml_engineer_overlap.pdf",
+  "jd": "data/jds/ml_platform.txt",
+  "expected": {
+    "resume_skills": [
+      "Python", "SQL",
+      "PyTorch", "scikit-learn", "Hugging Face Transformers or Transformers or Hugging Face",
+      "NLP or Natural Language Processing", "LLMs or Large Language Models",
+      "Docker", "Kubernetes or k8s", "MLflow", "GCP or Google Cloud",
+      "FastAPI"
+    ],
+    "resume_optional_skills": ["Machine Learning", "retrieval", "RAG", "forecasting", "text classification", "MLOps"],
+    "experience": [
+      {"start": "2022-03", "end": null},
+      {"start": "2023-01", "end": "2023-12"},
+      {"start": "2019-07", "end": "2022-02"}
+    ],
+    "jd_required_skills": ["Python", "PyTorch", "Kubernetes", "Docker", "GCP", "MLflow or Weights & Biases"],
+    "jd_optional_skills": ["Large Language Models", "Ray", "MLflow", "Weights & Biases", "model serving"],
+    "jd_required_years": null,
+    "route": "strong_match"
+  }
+}

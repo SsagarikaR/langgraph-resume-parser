@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 957 >>
+stream
+BT /F1 10 Tf 13 TL 50 800 Td (Margaret Okonkwo) Tj T* (margaret.okonkwo@example.com | Lagos, Nigeria | Date of birth: 14 March 1971) Tj T* () Tj T* (Summary) Tj T* (Former network administrator moving into DevOps, with a year of hands-on cloud automation.) Tj T* () Tj T* (Skills) Tj T* (Linux, Bash, Python, Git, Docker, Terraform, AWS, GitHub Actions, Nginx) Tj T* () Tj T* (Experience) Tj T* (Junior DevOps Engineer, Cloudbridge Ltd - Sep 2024 to Present) Tj T* (- Wrote Terraform modules for AWS networking and EC2.) Tj T* (- Built CI pipelines with GitHub Actions.) Tj T* (Network Administrator, Unity Bank - Feb 2018 to Aug 2024) Tj T* (- Managed Linux servers and Cisco network equipment.) Tj T* (- Automated server checks with Bash scripts.) Tj T* () Tj T* (Projects) Tj T* (Homelab - Self-hosted services behind Nginx. Technologies: Docker, Nginx, Linux) Tj T* () Tj T* (Education) Tj T* (B.Sc. Computer Science, University of Lagos, 2017) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001249 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1346
+%%EOF

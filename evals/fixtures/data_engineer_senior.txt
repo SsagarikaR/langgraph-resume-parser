@@ -1,0 +1,26 @@
+Sam Rivera
+sam.rivera@example.com | Hyderabad, India
+
+Summary
+Data engineer with 7 years of experience building batch and streaming data platforms on AWS.
+
+Skills
+Languages: Python, SQL, Scala
+Data: Apache Spark, Apache Airflow, dbt, Apache Kafka
+Cloud: AWS (S3, Glue, Redshift)
+Databases: PostgreSQL, Snowflake
+Tools: Docker, Terraform, Git
+
+Experience
+Senior Data Engineer, Orbitra Analytics - Sep 2021 to Present
+- Built Spark and Kafka pipelines processing 2 TB of events per day.
+- Moved 120 Airflow DAGs to dbt models on Snowflake.
+Data Engineer, Northwind Retail - Mar 2018 to Aug 2021
+- Built ETL jobs on AWS Glue and loaded the Redshift warehouse.
+
+Projects
+Clickstream Platform - Real-time clickstream analytics. Technologies: Kafka, Spark, Python
+Warehouse Migration - Redshift to Snowflake migration. Technologies: dbt, Snowflake, Terraform
+
+Education
+B.Tech Information Technology, Osmania University, 2017

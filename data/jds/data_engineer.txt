@@ -1,0 +1,23 @@
+Senior Data Engineer
+Quantia Labs · Remote (India) · Full-time · Experience: 5+ years
+
+About the role
+Quantia Labs builds analytics products for retailers. You will own the pipelines that turn billions of events into the datasets our customers query every day.
+
+Responsibilities
+- Build batch and streaming pipelines in Python and Spark.
+- Orchestrate workflows with Airflow and model data with dbt.
+- Run the platform on AWS and keep it reliable and cost-efficient.
+
+Required qualifications
+- 5+ years of data engineering experience.
+- Strong Python and SQL.
+- Hands-on experience with Apache Spark and Apache Airflow.
+- Experience with Kafka for streaming data.
+- Experience with AWS.
+- Experience with dbt.
+
+Nice to have
+- Snowflake or Redshift.
+- Terraform.
+- Docker.
