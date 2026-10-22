@@ -10,7 +10,7 @@ from app.core import prompts
 from app.core.config import get_settings
 from app.core.llm import structured_call
 from app.graph.exceptions import InvalidInputError
-from app.graph.matching import candidate_skills, is_met, role_months, unverified_skills
+from app.graph.matching import candidate_skills, is_met, mentioned, role_months, unverified_skills
 from app.graph.state import ResumeState
 from app.schemas.analysis import GapAnalysis, InterviewQuestionSet
 from app.schemas.job import JobRequirements
@@ -159,7 +159,29 @@ def generate_questions(state: ResumeState) -> dict:
         context["reviewer_feedback"] = state["review_feedback"]
 
     result = structured_call(InterviewQuestionSet, instructions, json.dumps(context, indent=2))
-    return {"interview_questions": [q.model_dump() for q in result.questions], "steps": ["generate_questions"]}
+
+    # Same spirit as unverified_skills: a question whose topic names a skill/project that never
+    # appears in the resume or job text is probably invented, so flag it instead of trusting it.
+    known_text = " ".join(
+        [
+            state["job"]["job_title"],
+            state.get("job_description", ""),
+            state.get("resume_text", ""),
+            *state["matching_skills"],
+            *state["missing_skills"],
+            *(p.get("name", "") for p in state["resume"]["projects"]),
+            *(t for p in state["resume"]["projects"] for t in p["technologies"]),
+        ]
+    ).lower()
+    questions = []
+    for q in result.questions:
+        data = q.model_dump()
+        # Behavioral questions legitimately ask about topics (e.g. "teamwork") that never appear
+        # verbatim in the resume or job text, so only cross-check topics tied to a specific skill
+        topic = data["topic"]
+        data["topic_verified"] = data["type"] == "behavioral" or (bool(topic) and mentioned(topic, known_text))
+        questions.append(data)
+    return {"interview_questions": questions, "steps": ["generate_questions"]}
 
 
 def human_review(state: ResumeState) -> dict:
