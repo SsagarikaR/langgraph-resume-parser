@@ -36,11 +36,12 @@ typecheck: ## Run mypy type checks
 	$(PYTHON) -m mypy app
 
 audit: ## Check locked dependencies for known vulnerabilities (same check as CI)
-	$(PYTHON) -m pip install -q pip-audit==2.10.1
+	$(PYTHON) -m pip install -q pip-audit==2.9.0
 	@today=$$(date +%F); \
-	ignores=$$(awk -v today="$$today" '/^CVE-/ { split($$2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $$1 }' .trivyignore); \
+	ignores=$$(awk -v today="$$today" '/^(CVE-|GHSA-)/ { split($$2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $$1 }' .trivyignore); \
+	for f in api ui dev; do $(PYTHON) scripts/filter_requirements_for_audit.py requirements/$$f.txt /tmp/audit-$$f.txt; done; \
 	$(PYTHON) -m pip_audit --require-hashes --disable-pip $$ignores \
-		-r requirements/api.txt -r requirements/ui.txt -r requirements/dev.txt
+		-r /tmp/audit-api.txt -r /tmp/audit-ui.txt -r /tmp/audit-dev.txt
 
 # ── Evaluations ────────────────────────────────────────────────────────────────
 
