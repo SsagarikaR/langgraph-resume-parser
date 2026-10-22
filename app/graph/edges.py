@@ -17,7 +17,8 @@ def route_after_matching(state: ResumeState) -> Literal["strong_match", "weak_ma
 def route_after_questions(state: ResumeState) -> Literal["review", "finalize"]:
     # The last revision is still applied before forcing finalize (no further review after the limit)
     revisions = state.get("revision_count", 0)
-    if revisions and revisions >= get_settings().max_revisions:
+    max_rev = get_settings().max_revisions
+    if revisions > 0 and (max_rev == 0 or revisions >= max_rev):
         return "finalize"
     return "review"
 
