@@ -33,7 +33,11 @@ dev = [
     "langgraph-resume-parser[ui]",
     "pytest~=9.1.1",
     "httpx~=0.28.1",
+    "pytest-cov~=7.0",
     "ruff~=0.16.10",
+    "mypy~=1.20.2",
+    "types-requests~=2.32",
+    "pre-commit~=4.3",
 ]
 
 [project.scripts]
@@ -41,18 +45,43 @@ resume-screener = "app.cli:main"
 resume-screener-ingest = "app.knowledge.ingest:main"
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "ui*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["app", "ui"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80  # CI fails if coverage drops below this
 
 [tool.ruff]
 line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "UP", "N"]
+# S = bandit security checks, SIM/C4/RUF = simplifications and common pitfalls
+select = ["E", "W", "F", "I", "B", "UP", "N", "S", "SIM", "C4", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # typographic characters (– …) in text are intentional
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S106", "S108"]  # asserts, fake secrets and fake paths are expected in tests
+"evals/**" = ["S101"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
+
+[tool.mypy]
+files = ["app", "evals", "ui"]
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true

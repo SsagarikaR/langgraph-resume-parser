@@ -1,0 +1,22 @@
+Daniel Okafor
+daniel.okafor@example.com | Lagos, Nigeria
+
+Summary
+Former network administrator moving into DevOps, with a year of hands-on cloud automation.
+
+Skills
+Linux, Bash, Python, Git, Docker, Terraform, AWS, GitHub Actions, Nginx
+
+Experience
+Junior DevOps Engineer, Cloudbridge Ltd - Sep 2024 to Present
+- Wrote Terraform modules for AWS networking and EC2.
+- Built CI pipelines with GitHub Actions.
+Network Administrator, Unity Bank - Feb 2018 to Aug 2024
+- Managed Linux servers and Cisco network equipment.
+- Automated server checks with Bash scripts.
+
+Projects
+Homelab - Self-hosted services behind Nginx. Technologies: Docker, Nginx, Linux
+
+Education
+B.Sc. Computer Science, University of Lagos, 2017

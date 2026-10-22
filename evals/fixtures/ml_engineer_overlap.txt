@@ -1,0 +1,26 @@
+Priya Nair
+priya.nair@example.com | Bengaluru, India
+
+Summary
+ML engineer who ships NLP and LLM features to production.
+
+Skills
+Languages: Python, SQL
+ML: PyTorch, scikit-learn, Hugging Face Transformers, NLP, LLMs
+MLOps and infrastructure: Docker, k8s, MLflow, GCP
+
+Experience
+Machine Learning Engineer, Lumen Health - Mar 2022 to Present
+- Fine-tuned transformer models for clinical note classification in PyTorch.
+- Served models on Kubernetes and tracked experiments with MLflow.
+Part-time ML Consultant, Freelance - Jan 2023 to Dec 2023
+- Built text classifiers with scikit-learn for two startups.
+Data Analyst, Orbit Retail - Jul 2019 to Feb 2022
+- Built SQL reports and Python forecasting scripts.
+
+Projects
+Note Triage - Routes clinical notes to the right team. Technologies: PyTorch, Hugging Face Transformers, Docker
+Docs QA Bot - Answers questions over internal docs with an LLM and retrieval. Technologies: Python, FastAPI, GCP
+
+Education
+B.Tech Computer Science, NIT Calicut, 2019

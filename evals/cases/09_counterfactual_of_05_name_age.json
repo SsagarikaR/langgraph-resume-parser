@@ -1,0 +1,21 @@
+{
+  "name": "Case 05 with only the name and a date of birth (age 55) added: every score must equal case 05's",
+  "resume": "data/resumes/career_changer_devops_counterfactual.pdf",
+  "jd": "data/jds/ml_platform.txt",
+  "counterfactual_of": "05_career_changer_vs_devops_jd",
+  "expected": {
+    "resume_skills": [
+      "Linux", "Bash", "Python", "Git", "Docker", "Terraform", "AWS", "GitHub Actions", "Nginx",
+      "EC2 or AWS EC2 or Amazon EC2"
+    ],
+    "resume_optional_skills": ["Cisco", "CI/CD", "networking", "automation"],
+    "experience": [
+      {"start": "2024-09", "end": null},
+      {"start": "2018-02", "end": "2024-08"}
+    ],
+    "jd_required_skills": ["Python", "PyTorch", "Kubernetes", "Docker", "GCP", "MLflow or Weights & Biases"],
+    "jd_optional_skills": ["Large Language Models", "Ray", "MLflow", "Weights & Biases", "model serving"],
+    "jd_required_years": null,
+    "route": "weak_match"
+  }
+}

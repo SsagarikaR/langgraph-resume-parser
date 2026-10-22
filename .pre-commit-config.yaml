@@ -1,0 +1,59 @@
+# Install once with: pre-commit install
+# (installs both the pre-commit and commit-msg hooks, per default_install_hook_types)
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        # Compose's !reset tag is not plain YAML; `docker compose config` validates that file
+        exclude: ^docker-compose\.prod\.yml$
+      - id: check-toml
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+
+  # Secrets (API keys, tokens) in staged changes, beyond the private keys detect-private-key finds
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: ["--fix"]
+      - id: ruff-format
+
+  # mypy runs from the project venv so it sees the installed dependencies' types
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # Project rules in semgrep/rules.yaml (config via settings, LLMs via the factory, untrusted text
+  # fenced, no secrets or resume text in logs); CI runs the same scan
+  - repo: https://github.com/semgrep/pre-commit
+    rev: v1.182.0
+    hooks:
+      - id: semgrep
+        args: ["--config", "semgrep/", "--error", "--metrics=off", "--skip-unknown-extensions"]
+        files: ^(app|ui|evals)/.*\.py$
+
+  # Commit messages must be "type(scope): subject", e.g. "feat(api): add rate limiting".
+  # Only the type is checked; the scope can be any text.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: ["--strict", "feat", "fix", "chore", "docs", "refactor", "test", "perf", "ci", "build", "style", "revert"]

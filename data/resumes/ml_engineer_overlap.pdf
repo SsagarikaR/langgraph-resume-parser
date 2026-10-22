@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1233 >>
+stream
+BT /F1 10 Tf 13 TL 50 800 Td (Priya Nair) Tj T* (priya.nair@example.com | Bengaluru, India) Tj T* () Tj T* (Summary) Tj T* (ML engineer who ships NLP and LLM features to production.) Tj T* () Tj T* (Skills) Tj T* (Languages: Python, SQL) Tj T* (ML: PyTorch, scikit-learn, Hugging Face Transformers, NLP, LLMs) Tj T* (MLOps and infrastructure: Docker, k8s, MLflow, GCP) Tj T* () Tj T* (Experience) Tj T* (Machine Learning Engineer, Lumen Health - Mar 2022 to Present) Tj T* (- Fine-tuned transformer models for clinical note classification in PyTorch.) Tj T* (- Served models on Kubernetes and tracked experiments with MLflow.) Tj T* (Part-time ML Consultant, Freelance - Jan 2023 to Dec 2023) Tj T* (- Built text classifiers with scikit-learn for two startups.) Tj T* (Data Analyst, Orbit Retail - Jul 2019 to Feb 2022) Tj T* (- Built SQL reports and Python forecasting scripts.) Tj T* () Tj T* (Projects) Tj T* (Note Triage - Routes clinical notes to the right team. Technologies: PyTorch, Hugging Face Transformers, Docker) Tj T* (Docs QA Bot - Answers questions over internal docs with an LLM and retrieval. Technologies: Python, FastAPI, GCP) Tj T* () Tj T* (Education) Tj T* (B.Tech Computer Science, NIT Calicut, 2019) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001526 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1623
+%%EOF

@@ -1,0 +1,23 @@
+{
+  "name": "7 yrs data engineer vs senior (5+ yrs) data engineering JD: strong match",
+  "resume": "data/resumes/data_engineer_senior.pdf",
+  "jd": "data/jds/data_engineer.txt",
+  "expected": {
+    "resume_skills": [
+      "Python", "SQL", "Scala",
+      "Spark or Apache Spark", "Airflow or Apache Airflow", "dbt", "Kafka or Apache Kafka",
+      "AWS", "S3 or Amazon S3", "Glue or AWS Glue", "Redshift or Amazon Redshift",
+      "PostgreSQL", "Snowflake",
+      "Docker", "Terraform", "Git"
+    ],
+    "resume_optional_skills": ["ETL", "data modeling", "streaming", "batch processing", "data warehousing"],
+    "experience": [
+      {"start": "2021-09", "end": null},
+      {"start": "2018-03", "end": "2021-08"}
+    ],
+    "jd_required_skills": ["Python", "SQL", "Spark", "Airflow", "Kafka", "AWS", "dbt"],
+    "jd_optional_skills": ["Snowflake", "Redshift", "Terraform", "Docker", "data engineering"],
+    "jd_required_years": 5,
+    "route": "strong_match"
+  }
+}

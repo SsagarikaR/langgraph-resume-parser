@@ -1,0 +1,15 @@
+# gitleaks (pre-commit hook and the CI secrets job): the default rules, plus the placeholder
+# credentials CI starts the stack with. Keep this list to known fakes; never allowlist a real key.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Placeholder credentials used by the CI smoke and compose tests"
+regexTarget = "match"
+regexes = ['''ci-(api-key|placeholder|qdrant-key|password|grafana-password)''']
+
+[[allowlists]]
+description = "Fake test API keys in the unit test suite (not real credentials)"
+paths = ['''tests/test_api\.py''']
+regexTarget = "match"
+regexes = ['''key-ui-\w+''']

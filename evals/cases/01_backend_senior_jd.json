@@ -25,6 +25,7 @@
       "AWS", "Kafka or RabbitMQ", "REST API design", "pytest", "CI/CD"
     ],
     "jd_optional_skills": ["EC2", "S3", "RDS", "EKS", "microservices", "testing"],
-    "jd_required_years": 5
+    "jd_required_years": 5,
+    "route": "weak_match"
   }
 }

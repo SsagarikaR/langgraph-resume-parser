@@ -1,0 +1,21 @@
+ML Platform Engineer
+Kestrel AI · Hybrid (Bengaluru) · Full-time
+
+About the role
+Kestrel AI trains and serves language models for enterprise search. You will build the platform our researchers use to train, evaluate and deploy models.
+
+Responsibilities
+- Build training and serving pipelines for our models.
+- Run model infrastructure on Kubernetes in Google Cloud.
+- Track experiments and model versions.
+
+Required qualifications
+- Strong Python.
+- Experience with PyTorch.
+- Experience with Kubernetes and Docker.
+- Experience with GCP.
+- Experience with MLflow or Weights & Biases.
+
+Nice to have
+- Experience with large language models.
+- Ray.
