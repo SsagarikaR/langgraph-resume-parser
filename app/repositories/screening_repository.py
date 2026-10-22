@@ -174,7 +174,7 @@ class ScreeningRepository:
         updates = []
         for thread_id, created_at in rows:
             latest = checkpointer.get_tuple(config_for(thread_id))
-            updates.append((latest.checkpoint["ts"] if latest else created_at, thread_id))
+            updates.append((latest.checkpoint["ts"] if latest and latest.checkpoint else created_at, thread_id))
         with checkpointer.cursor() as cur:
             cur.executemany("UPDATE screenings SET last_active = ? WHERE thread_id = ?", updates)
 
