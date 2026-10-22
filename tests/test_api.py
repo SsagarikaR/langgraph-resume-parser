@@ -25,6 +25,7 @@ from app.services.exceptions import (
 PDF_UPLOAD = {"resume": ("cv.pdf", b"%PDF-1.7", "application/pdf")}
 JD_FORM = {"jd_text": "x" * 100}
 SCREENING = {"thread_id": "abc", "status": "awaiting_review"}
+UI_KEY = "key-ui-01234567890123456789012345"  # 32+ chars: meets config.MIN_PLAINTEXT_KEY_LENGTH
 
 
 class StubService:
@@ -287,9 +288,9 @@ def recording(client):
 
 
 def test_each_named_key_identifies_its_caller(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "alice:key-a, bob:key-b")
+    monkeypatch.setenv("API_KEYS", "alice:key-a-01234567890123456789012345, bob:key-b-01234567890123456789012345")
     get_settings.cache_clear()
-    assert client.get("/screenings/abc", headers={"X-API-Key": "key-b"}).status_code == 200
+    assert client.get("/screenings/abc", headers={"X-API-Key": "key-b-01234567890123456789012345"}).status_code == 200
     assert client.get("/screenings/abc", headers={"X-API-Key": "nope"}).status_code == 401
     assert recording == [("get", "bob")]
 
@@ -307,16 +308,26 @@ def test_open_api_has_no_caller(client, recording):
 
 
 def test_review_passes_the_reviewer_and_the_caller(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     get_settings.cache_clear()
     body = {"action": "approve", "reviewer": "alice"}
-    assert client.post("/screenings/abc/review", json=body, headers={"X-API-Key": "key-ui"}).status_code == 200
+    assert client.post("/screenings/abc/review", json=body, headers={"X-API-Key": UI_KEY}).status_code == 200
     assert recording == [("review", "alice", "ui")]
     unnamed = {"action": "approve", "reviewer": ""}
-    assert client.post("/screenings/abc/review", json=unnamed, headers={"X-API-Key": "key-ui"}).status_code == 422
+    assert client.post("/screenings/abc/review", json=unnamed, headers={"X-API-Key": UI_KEY}).status_code == 422
 
 
-@pytest.mark.parametrize("value", ["alice", "alice:", ":key", "a b:key", "alice:k1,alice:k2", "alice:k,bob:k"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "alice",
+        "alice:",
+        ":key",
+        "a b:key",
+        "alice:key-0123456789012345678901210000,alice:key-0123456789012345678901220000",
+        "alice:key-0123456789012345678901230000,bob:key-0123456789012345678901230000",
+    ],
+)
 def test_malformed_api_keys_fail_at_startup(monkeypatch, value):
     monkeypatch.setenv("API_KEYS", value)
     get_settings.cache_clear()
@@ -361,12 +372,12 @@ def test_empty_api_docs_in_env_means_automatic(monkeypatch):
 
 
 def test_the_client_can_name_the_person_it_acts_for(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     get_settings.cache_clear()
-    headers = {"X-API-Key": "key-ui", "X-Acting-User": "alice"}
+    headers = {"X-API-Key": UI_KEY, "X-Acting-User": "alice"}
     assert client.get("/screenings/abc", headers=headers).status_code == 200
     assert recording == [("get", "ui/alice")]
-    bad = {"X-API-Key": "key-ui", "X-Acting-User": "../bob"}
+    bad = {"X-API-Key": UI_KEY, "X-Acting-User": "../bob"}
     assert client.get("/screenings/abc", headers=bad).status_code == 400
 
 
@@ -410,10 +421,10 @@ def test_metrics_can_be_turned_off(monkeypatch):
 
 
 def test_the_request_log_names_the_caller(client, recording, monkeypatch, caplog):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     get_settings.cache_clear()
-    with caplog.at_level(logging.INFO, logger="app.api.main"):
-        client.delete("/screenings/abc", headers={"X-API-Key": "key-ui", "X-Acting-User": "alice"})
+    with caplog.at_level(logging.INFO, logger="app.api.middleware"):
+        client.delete("/screenings/abc", headers={"X-API-Key": UI_KEY, "X-Acting-User": "alice"})
     assert "(caller: ui/alice)" in caplog.text
 
 
@@ -461,24 +472,24 @@ def test_a_busy_server_refuses_a_streamed_run_with_503_not_an_error_event(client
 
 def test_each_person_behind_one_key_has_their_own_rate_limit(client, recording, monkeypatch):
     # Every UI user reaches the API from the UI's address: an address budget would be shared by all
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
     get_settings.cache_clear()
 
     def get(user):
-        return client.get("/screenings/abc", headers={"X-API-Key": "key-ui", "X-Acting-User": user}).status_code
+        return client.get("/screenings/abc", headers={"X-API-Key": UI_KEY, "X-Acting-User": user}).status_code
 
     assert [get("alice") for _ in range(3)] == [200, 200, 429]
     assert get("bob") == 200
 
 
 def test_the_workflow_limit_is_per_person_too(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("WORKFLOW_RATE_LIMIT_PER_MINUTE", "1")
     get_settings.cache_clear()
 
     def review(user):
-        headers = {"X-API-Key": "key-ui", "X-Acting-User": user}
+        headers = {"X-API-Key": UI_KEY, "X-Acting-User": user}
         return client.post("/screenings/abc/review", json={"action": "approve"}, headers=headers).status_code
 
     assert [review("alice"), review("alice"), review("bob")] == [200, 429, 200]
@@ -505,24 +516,24 @@ def test_importing_the_api_package_does_not_build_the_app():
 
 def test_each_session_of_a_shared_login_has_its_own_budget(client, recording, monkeypatch):
     # The shared UI login names no person, so it names the browser session instead
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("WORKFLOW_RATE_LIMIT_PER_MINUTE", "1")
     get_settings.cache_clear()
 
     def review(session):
-        headers = {"X-API-Key": "key-ui", "X-Client-Session": session}
+        headers = {"X-API-Key": UI_KEY, "X-Client-Session": session}
         return client.post("/screenings/abc/review", json={"action": "approve"}, headers=headers).status_code
 
     assert [review("session-aaaa"), review("session-aaaa"), review("session-bbbb")] == [200, 429, 200]
 
 
 def test_a_session_does_not_split_a_named_persons_budget(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "1")
     get_settings.cache_clear()
 
     def get(session):
-        headers = {"X-API-Key": "key-ui", "X-Acting-User": "alice", "X-Client-Session": session}
+        headers = {"X-API-Key": UI_KEY, "X-Acting-User": "alice", "X-Client-Session": session}
         return client.get("/screenings/abc", headers=headers).status_code
 
     assert [get("session-aaaa"), get("session-bbbb")] == [200, 429]
@@ -530,29 +541,29 @@ def test_a_session_does_not_split_a_named_persons_budget(client, recording, monk
 
 def test_the_key_ceiling_stops_rotating_names_for_more_budget(client, recording, monkeypatch):
     # Acting users and sessions are names the client picks: the key's total is capped regardless
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("KEY_WORKFLOW_RATE_LIMIT_PER_MINUTE", "3")
     get_settings.cache_clear()
 
     def review(user):
-        headers = {"X-API-Key": "key-ui", "X-Acting-User": user}
+        headers = {"X-API-Key": UI_KEY, "X-Acting-User": user}
         return client.post("/screenings/abc/review", json={"action": "approve"}, headers=headers).status_code
 
     statuses = [review(f"user{i}") for i in range(5)]
     assert statuses == [200, 200, 200, 429, 429]
     r = client.post(
-        "/screenings/abc/review", json={"action": "approve"}, headers={"X-API-Key": "key-ui", "X-Acting-User": "zed"}
+        "/screenings/abc/review", json={"action": "approve"}, headers={"X-API-Key": UI_KEY, "X-Acting-User": "zed"}
     )
     assert "for this API key" in r.json()["detail"]
 
 
 def test_a_refused_request_uses_no_budget(client, recording, monkeypatch):
     # Over the key's ceiling, the person's budget is not spent as well
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("KEY_RATE_LIMIT_PER_MINUTE", "1")
     monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "2")
     get_settings.cache_clear()
-    headers = {"X-API-Key": "key-ui", "X-Acting-User": "alice"}
+    headers = {"X-API-Key": UI_KEY, "X-Acting-User": "alice"}
     assert [client.get("/screenings/abc", headers=headers).status_code for _ in range(2)] == [200, 429]
     monkeypatch.setenv("KEY_RATE_LIMIT_PER_MINUTE", "100")
     get_settings.cache_clear()
@@ -610,14 +621,14 @@ def test_the_api_refuses_to_start_without_keys_unless_told_it_is_local(monkeypat
 
 
 def test_only_trusted_keys_may_name_the_person_they_act_for(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui, alice:key-a")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}, alice:key-a-01234567890123456789012345")
     monkeypatch.setenv("ACTING_USER_KEYS", "ui")
     get_settings.cache_clear()
-    posing = {"X-API-Key": "key-a", "X-Acting-User": "bob"}
+    posing = {"X-API-Key": "key-a-01234567890123456789012345", "X-Acting-User": "bob"}
     assert client.get("/screenings/abc", headers=posing).status_code == 403
     # Refused before the body is read, like a wrong key
     assert client.post("/screenings", files=PDF_UPLOAD, data=JD_FORM, headers=posing).status_code == 403
-    assert client.get("/screenings/abc", headers={"X-API-Key": "key-a"}).status_code == 200
+    assert client.get("/screenings/abc", headers={"X-API-Key": "key-a-01234567890123456789012345"}).status_code == 200
     assert recording == [("get", "alice")]
 
 
@@ -644,15 +655,15 @@ def test_the_workflow_limit_is_applied_before_the_upload_is_read(client, monkeyp
 
 
 def test_each_key_has_a_daily_workflow_quota(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     monkeypatch.setenv("KEY_DAILY_WORKFLOW_LIMIT", "2")
     get_settings.cache_clear()
     body = {"action": "approve"}
     for user in ("alice", "bob"):
-        headers = {"X-API-Key": "key-ui", "X-Acting-User": user}
+        headers = {"X-API-Key": UI_KEY, "X-Acting-User": user}
         assert client.post("/screenings/abc/review", json=body, headers=headers).status_code == 200
     # A new person behind the same key does not get a new quota
-    r = client.post("/screenings/abc/review", json=body, headers={"X-API-Key": "key-ui", "X-Acting-User": "carol"})
+    r = client.post("/screenings/abc/review", json=body, headers={"X-API-Key": UI_KEY, "X-Acting-User": "carol"})
     assert r.status_code == 429
     assert "per day" in r.json()["detail"]
 
@@ -665,7 +676,7 @@ def test_an_unhandled_error_is_counted_and_logged_as_500(monkeypatch, caplog):
     metrics.reset()
     app.dependency_overrides[get_service] = BrokenService
     try:
-        with TestClient(app, raise_server_exceptions=False) as c, caplog.at_level(logging.INFO, "app.api.main"):
+        with TestClient(app, raise_server_exceptions=False) as c, caplog.at_level(logging.INFO, "app.api.middleware"):
             assert c.get("/screenings/abc").status_code == 500
             body = c.get("/metrics").text
     finally:
@@ -686,10 +697,10 @@ def test_metric_values_are_written_exactly_and_latency_is_a_histogram(client):
 
 
 def test_a_key_can_be_stored_as_its_sha256(client, recording, monkeypatch):
-    digest = hashlib.sha256(b"key-a").hexdigest()
+    digest = hashlib.sha256(b"key-a-01234567890123456789012345").hexdigest()
     monkeypatch.setenv("API_KEYS", f"alice:sha256:{digest}")
     get_settings.cache_clear()
-    assert client.get("/screenings/abc", headers={"X-API-Key": "key-a"}).status_code == 200
+    assert client.get("/screenings/abc", headers={"X-API-Key": "key-a-01234567890123456789012345"}).status_code == 200
     # The hash itself is not a key: someone who reads the configuration cannot use it
     assert client.get("/screenings/abc", headers={"X-API-Key": f"sha256:{digest}"}).status_code == 401
     assert recording == [("get", "alice")]
@@ -698,21 +709,21 @@ def test_a_key_can_be_stored_as_its_sha256(client, recording, monkeypatch):
 def test_an_expired_key_is_refused(client, recording, monkeypatch):
     yesterday = (date.today() - timedelta(days=2)).isoformat()
     tomorrow = (date.today() + timedelta(days=2)).isoformat()
-    monkeypatch.setenv("API_KEYS", "old:key-old, new:key-new")
+    monkeypatch.setenv("API_KEYS", "old:key-old-012345678901234567890100, new:key-new-012345678901234567890100")
     monkeypatch.setenv("API_KEY_EXPIRES", f"old:{yesterday}, new:{tomorrow}")
     get_settings.cache_clear()
-    r = client.get("/screenings/abc", headers={"X-API-Key": "key-old"})
+    r = client.get("/screenings/abc", headers={"X-API-Key": "key-old-012345678901234567890100"})
     assert r.status_code == 401
     assert "expired" in r.json()["detail"]
-    assert client.get("/screenings/abc", headers={"X-API-Key": "key-new"}).status_code == 200
+    assert client.get("/screenings/abc", headers={"X-API-Key": "key-new-012345678901234567890100"}).status_code == 200
     assert recording == [("get", "new")]
 
 
 def test_an_audit_key_reads_every_screening_but_changes_none(client, recording, monkeypatch):
-    monkeypatch.setenv("API_KEYS", "ui:key-ui, audit:key-audit")
+    monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}, audit:key-audit-0123456789012345678900")
     monkeypatch.setenv("AUDIT_KEYS", "audit")
     get_settings.cache_clear()
-    auditor = {"X-API-Key": "key-audit"}
+    auditor = {"X-API-Key": "key-audit-0123456789012345678900"}
     assert client.get("/screenings/abc", headers=auditor).status_code == 200
     assert client.get("/screenings", headers=auditor).status_code == 200
     assert recording == [("get", None), ("list", None, 50)]  # None: every caller's screenings
@@ -723,7 +734,7 @@ def test_an_audit_key_reads_every_screening_but_changes_none(client, recording, 
     assert client.delete("/screenings/abc", headers=auditor).status_code == 403
     assert client.get("/screenings/abc", headers={**auditor, "X-Acting-User": "bob"}).status_code == 403
     # Other keys still see only their own
-    client.get("/screenings/abc", headers={"X-API-Key": "key-ui"})
+    client.get("/screenings/abc", headers={"X-API-Key": UI_KEY})
     assert recording[-1] == ("get", "ui")
 
 
@@ -731,10 +742,19 @@ def test_an_audit_key_reads_every_screening_but_changes_none(client, recording, 
     ("env", "message"),
     [
         ({"API_KEYS": "alice:sha256:abc"}, "64 hex"),
-        ({"API_KEYS": "alice:k", "API_KEY_EXPIRES": "alice:31-01-2027"}, "API_KEY_EXPIRES"),
-        ({"API_KEYS": "alice:k", "API_KEY_EXPIRES": "bob:2027-01-31"}, "not configured"),
-        ({"API_KEYS": "alice:k", "AUDIT_KEYS": "bob"}, "not configured"),
-        ({"API_KEYS": "ui:k", "AUDIT_KEYS": "ui", "ACTING_USER_KEYS": "ui"}, "AUDIT_KEYS"),
+        (
+            {"API_KEYS": "alice:key-0123456789012345678901234567", "API_KEY_EXPIRES": "alice:31-01-2027"},
+            "API_KEY_EXPIRES",
+        ),
+        (
+            {"API_KEYS": "alice:key-0123456789012345678901234567", "API_KEY_EXPIRES": "bob:2027-01-31"},
+            "not configured",
+        ),
+        ({"API_KEYS": "alice:key-0123456789012345678901234567", "AUDIT_KEYS": "bob"}, "not configured"),
+        (
+            {"API_KEYS": "ui:key-0123456789012345678901234567", "AUDIT_KEYS": "ui", "ACTING_USER_KEYS": "ui"},
+            "AUDIT_KEYS",
+        ),
     ],
 )
 def test_key_roles_and_expiry_are_checked_at_startup(monkeypatch, env, message):

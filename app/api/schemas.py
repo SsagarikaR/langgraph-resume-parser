@@ -4,9 +4,10 @@ The resume, job and analysis data the workflow works with is in app/schemas/; th
 turns it into ScreeningResponse.
 """
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.analysis import GapAnalysis, InterviewQuestion
 from app.schemas.resume import Education, Project
@@ -25,6 +26,12 @@ class ReviewRequest(BaseModel):
     # name, which vouches for it; an X-Acting-User takes precedence. Letters, digits, spaces and
     # . , ' @ - only: it is logged, so a newline must not be able to forge a log line.
     reviewer: str | None = Field(None, min_length=1, max_length=100, pattern=r"^[\w .,'@-]+$")
+
+    @field_validator("reviewer")
+    @classmethod
+    def _collapse_whitespace(cls, value: str | None) -> str | None:
+        # Repeated spaces/periods (e.g. "admin .") are valid but low value for an audit trail
+        return re.sub(r"\s+", " ", value).strip() if value else value
 
     @model_validator(mode="after")
     def _revise_needs_feedback(self):

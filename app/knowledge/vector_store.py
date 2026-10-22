@@ -8,6 +8,8 @@ Qdrant runs in local mode (data in ./qdrant_data) unless QDRANT_URL points at a 
 """
 
 import atexit
+import contextlib
+import fcntl
 import logging
 import threading
 import uuid
@@ -18,11 +20,29 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
 
-from app.core.config import get_settings
+from app.core.config import BASE_DIR, get_settings
 
 logger = logging.getLogger(__name__)
 
 COLLECTION = "interview_guidelines"
+# Records which embedding model produced the collection's vectors, so a same-dimension model swap
+# (not caught by the vector-size check alone) still triggers a rebuild instead of leaving stale,
+# semantically mismatched vectors in place indefinitely.
+_MODEL_MARKER_PATH = BASE_DIR / ".qdrant_embedding_model"
+# Coordinates `ingest()` (can run as a separate `python -m app.knowledge.ingest` process) with
+# `search()`/`ensure_index()` in the API process, so a search never reads mid-rebuild.
+_LOCK_PATH = BASE_DIR / ".qdrant_ingest.lock"
+
+
+@contextlib.contextmanager
+def _file_lock(exclusive: bool):
+    _LOCK_PATH.touch(exist_ok=True)
+    with open(_LOCK_PATH) as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 @lru_cache
@@ -75,9 +95,14 @@ def chunk_markdown(path: Path) -> list[dict]:
     return chunks
 
 
+def _marked_embedding_model() -> str | None:
+    return _MODEL_MARKER_PATH.read_text().strip() if _MODEL_MARKER_PATH.exists() else None
+
+
 def ingest(kb_dir: Path | None = None) -> int:
     """(Re)build the collection from the markdown files. Returns the number of chunks stored."""
-    kb_dir = kb_dir or get_settings().knowledge_base_dir
+    settings = get_settings()
+    kb_dir = kb_dir or settings.knowledge_base_dir
     chunks = [c for path in sorted(kb_dir.glob("*.md")) for c in chunk_markdown(path)]
     if not chunks:
         raise ValueError(f"No guideline files found in {kb_dir}")
@@ -87,19 +112,24 @@ def ingest(kb_dir: Path | None = None) -> int:
         PointStruct(id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"{c['source']}#{i}")), vector=vector, payload=c)
         for i, (c, vector) in enumerate(zip(chunks, vectors, strict=True))
     ]
-    client = get_client()
     size = len(vectors[0])
-    if client.collection_exists(COLLECTION) and _vector_size(client) != size:
-        client.delete_collection(COLLECTION)  # embedding model changed: old vectors are not comparable
-    if not client.collection_exists(COLLECTION):
-        client.create_collection(COLLECTION, vectors_config=VectorParams(size=size, distance=Distance.COSINE))
+    with _file_lock(exclusive=True):
+        client = get_client()
+        # Rebuild on a dimension change (incomparable vectors) or a same-dimension model swap
+        # (comparable size, different semantic space): either way the old vectors must go.
+        stale_model = _marked_embedding_model() not in (None, settings.embedding_model)
+        if client.collection_exists(COLLECTION) and (_vector_size(client) != size or stale_model):
+            client.delete_collection(COLLECTION)
+        if not client.collection_exists(COLLECTION):
+            client.create_collection(COLLECTION, vectors_config=VectorParams(size=size, distance=Distance.COSINE))
 
-    # Update in place, then drop chunks that no longer exist, so searches keep working during a re-index
-    client.upsert(COLLECTION, points=points)
-    keep = {str(p.id) for p in points}
-    stale = [point_id for point_id in _all_ids(client) if str(point_id) not in keep]
-    if stale:
-        client.delete(COLLECTION, points_selector=PointIdsList(points=stale))
+        # Update in place, then drop chunks that no longer exist, so searches keep working during a re-index
+        client.upsert(COLLECTION, points=points)
+        keep = {str(p.id) for p in points}
+        stale = [point_id for point_id in _all_ids(client) if str(point_id) not in keep]
+        if stale:
+            client.delete(COLLECTION, points_selector=PointIdsList(points=stale))
+        _MODEL_MARKER_PATH.write_text(settings.embedding_model)
     logger.info("Indexed %d guideline chunks from %s (%d stale removed)", len(chunks), kb_dir, len(stale))
     return len(chunks)
 
@@ -140,12 +170,20 @@ def ping() -> None:
     get_client().collection_exists(COLLECTION)
 
 
+@lru_cache(maxsize=256)
+def _embed_query_cached(query: str) -> tuple[float, ...]:
+    """Query embeddings, cached: screenings repeat the same skill names (e.g. "Kafka") often
+    enough that re-calling the embedding API for each one is wasted latency and cost."""
+    return tuple(get_embeddings().embed_query(query))
+
+
 def search(query: str) -> list[dict]:
     """Closest guideline chunks to `query`, using the configured count and score cut-off."""
     settings = get_settings()
     ensure_index()
-    vector = get_embeddings().embed_query(query)
-    result = get_client().query_points(
-        COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
-    )
+    vector = list(_embed_query_cached(query))
+    with _file_lock(exclusive=False):
+        result = get_client().query_points(
+            COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
+        )
     return [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
