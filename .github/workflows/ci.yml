@@ -180,7 +180,10 @@ jobs:
         run: |
           set -x
           target() { docker compose exec -T prometheus wget -qO- http://localhost:9090/api/v1/targets; }
-          test "$(target | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["activeTargets"][0]["health"])')" = up
+          health() { target | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["activeTargets"][0]["health"])'; }
+          # scrape_interval is 15s; a target reports "unknown" until its first scrape completes
+          for _ in $(seq 30); do [ "$(health)" = up ] && break; sleep 2; done
+          test "$(health)" = up
           curl -ksf -u "admin:ci-grafana-password" http://localhost:3000/api/search | grep -q '"uid":"resume-screener"'
       - name: Check routing and protection through the proxy
         run: |
