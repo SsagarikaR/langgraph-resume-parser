@@ -1,6 +1,6 @@
 # TLS-terminating reverse proxy for the compose stack: the only service published on the host.
 #   https://<SITE_ADDRESS>/        → Streamlit UI
-#   https://<SITE_ADDRESS>/api/... → API (e.g. /api/screenings, /api/health)
+#   https://<SITE_ADDRESS>/api/... → API (e.g. /api/v1/screenings, /api/health)
 # SITE_ADDRESS=localhost (default) uses Caddy's own local CA: browsers warn until it is trusted.
 # A public domain name pointing at this host gets a Let's Encrypt certificate automatically.
 {$SITE_ADDRESS:localhost} {
