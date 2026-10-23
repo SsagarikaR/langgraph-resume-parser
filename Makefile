@@ -39,9 +39,10 @@ audit: ## Check locked dependencies for known vulnerabilities (same check as CI)
 	$(PYTHON) -m pip install -q pip-audit==2.9.0
 	@today=$$(date +%F); \
 	ignores=$$(awk -v today="$$today" '/^(CVE-|GHSA-)/ { split($$2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $$1 }' .trivyignore); \
-	for f in api ui dev; do $(PYTHON) scripts/filter_requirements_for_audit.py requirements/$$f.txt /tmp/audit-$$f.txt; done; \
-	$(PYTHON) -m pip_audit --require-hashes --disable-pip $$ignores \
-		-r /tmp/audit-api.txt -r /tmp/audit-ui.txt -r /tmp/audit-dev.txt
+	for f in api ui dev; do \
+		$(PYTHON) scripts/filter_requirements_for_audit.py requirements/$$f.txt /tmp/audit-$$f.txt; \
+		$(PYTHON) -m pip_audit --require-hashes --disable-pip $$ignores -r /tmp/audit-$$f.txt; \
+	done
 
 # ── Evaluations ────────────────────────────────────────────────────────────────
 

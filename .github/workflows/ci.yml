@@ -60,14 +60,16 @@ jobs:
         # to different versions per Python version appears twice with mutually exclusive markers;
         # pip-audit's static parser can't handle two lines for one name, so audit a copy filtered
         # down to this job's own Python version instead (scripts/filter_requirements_for_audit.py).
+        # api/ui/dev are resolved independently (scripts/lock.sh), so a shared transitive dependency
+        # can legitimately land on a different pinned version in each file; pip-audit refuses a
+        # combined -r set with conflicting pins for the same package, so each file is audited on its own.
         run: |
           today=$(date +%F)
           ignores=$(awk -v today="$today" '/^(CVE-|GHSA-)/ { split($2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $1 }' .trivyignore)
           for f in api ui dev; do
             python3 scripts/filter_requirements_for_audit.py requirements/$f.txt /tmp/audit-$f.txt
+            pip-audit --require-hashes --disable-pip $ignores -r /tmp/audit-$f.txt
           done
-          pip-audit --require-hashes --disable-pip $ignores \
-            -r /tmp/audit-api.txt -r /tmp/audit-ui.txt -r /tmp/audit-dev.txt
 
   # The pre-commit hooks can be skipped (--no-verify), so CI runs the same secret and rule checks
   static-analysis:
@@ -192,8 +194,8 @@ jobs:
           code() { curl -ks -o /dev/null -w '%{http_code}' "$@"; }
           curl -ksf "$base/api/health" | grep -q '"ok"'
           curl -ksf "$base/api/ready" | grep -q '"database":"ok","guidelines":"ok"'   # SQLite and Qdrant
-          test "$(code "$base/api/screenings")" = 401                              # no key
-          test "$(code -H 'X-API-Key: ci-api-key' "$base/api/screenings")" = 200   # with the key
+          test "$(code "$base/api/v1/screenings")" = 401                              # no key
+          test "$(code -H 'X-API-Key: ci-api-key' "$base/api/v1/screenings")" = 200   # with the key
           test "$(code "$base/api/metrics")" = 404                                 # internal only
           test "$(code "$base/api/docs")" = 404                                    # off with keys
           curl -ksI "$base/" | grep -qi '^x-frame-options: deny'                   # UI headers
@@ -207,7 +209,7 @@ jobs:
           backup=$(ls backups/checkpoints-*.db)
           scripts/restore.sh "$backup"
           curl -ksf https://localhost/api/ready | grep -q '"database":"ok"'
-          test "$(curl -ks -o /dev/null -w '%{http_code}' -H 'X-API-Key: ci-api-key' https://localhost/api/screenings)" = 200
+          test "$(curl -ks -o /dev/null -w '%{http_code}' -H 'X-API-Key: ci-api-key' https://localhost/api/v1/screenings)" = 200
           # A damaged backup is refused before the live database is touched
           echo "not a database" > backups/broken.db
           if scripts/restore.sh backups/broken.db; then echo "a broken backup was restored" >&2; exit 1; fi
