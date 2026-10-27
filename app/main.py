@@ -9,7 +9,6 @@ from fastapi.responses import PlainTextResponse
 
 from app.config.logging import setup_logging
 from app.config.settings import get_settings
-from app.core.metrics import metrics
 from app.exceptions.domain import ScreeningError
 from app.exceptions.handlers import handle_screening_error
 from app.middleware.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER, require_api_key
@@ -20,6 +19,8 @@ from app.middleware.middleware import (
     add_security_headers,
     track_request,
 )
+from app.observability.metrics import metrics
+from app.observability.tracing import setup_tracing
 from app.routes.health_routes import router as health_router
 from app.routes.screening_routes import router as screenings_router
 from app.utils.deps import get_service
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs else None,
         openapi_url="/openapi.json" if docs else None,
     )
+    setup_tracing(app, settings.otel_exporter_otlp_endpoint)
     api_prefix = settings.api_prefix
     app.include_router(health_router)
     app.include_router(screenings_router, prefix=api_prefix)

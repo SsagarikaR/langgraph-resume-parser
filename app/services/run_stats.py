@@ -3,7 +3,7 @@ import time
 
 from langchain_core.callbacks import UsageMetadataCallbackHandler
 
-from app.core.metrics import metrics
+from app.observability.metrics import metrics
 
 logger = logging.getLogger(__name__)
 

@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     daily_token_budget: int = Field(5_000_000, ge=0)  # server-wide LLM token cap per 24 h; 0 = no limit
     max_concurrent_runs: int = Field(8, gt=0)  # max workflows running at once server-wide
     metrics_enabled: bool = True  # expose GET /metrics for Prometheus
+    otel_exporter_otlp_endpoint: str | None = None  # e.g. http://otel-collector:4318; unset disables tracing
 
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"  # json = structured logs for log collectors

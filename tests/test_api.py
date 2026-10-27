@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.config.settings import get_settings
-from app.core.metrics import metrics
 from app.exceptions.domain import (
     ScreeningBusyError,
     ScreeningNotFoundError,
@@ -20,6 +19,7 @@ from app.exceptions.domain import (
     WorkflowFailedError,
 )
 from app.main import create_app
+from app.observability.metrics import metrics
 from app.routes import health_routes as health
 from app.utils.deps import get_service
 
