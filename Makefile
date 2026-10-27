@@ -1,4 +1,4 @@
-.PHONY: help install dev ui test lint format typecheck eval backup restore deploy wipe secrets wipe-yes up down logs eval-pdfs monitoring-up monitoring-down monitoring-logs
+.PHONY: help install dev ui test lint format typecheck eval backup restore deploy wipe secrets wipe-yes up down logs eval-pdfs monitoring-up monitoring-down monitoring-logs audit
 
 PYTHON := .venv/bin/python3
 # Only needed if your user isn't in the `docker` group: make up SUDO=sudo
@@ -16,7 +16,7 @@ install: ## Create venv and install all dependencies
 	$(PYTHON) -m pre_commit install
 
 dev: ## Start the API server locally (hot-reload)
-	$(PYTHON) -m uvicorn app.api.main:app --reload
+	@set -a; [ -f .env ] && . ./.env; set +a; $(PYTHON) -m uvicorn app.api.main:app --reload
 
 ui: ## Start the Streamlit UI locally (reads .env.ui.local if it exists)
 	@set -a; [ -f .env.ui.local ] && . ./.env.ui.local; set +a; $(PYTHON) -m streamlit run ui/streamlit_app.py
@@ -34,6 +34,15 @@ format: ## Auto-fix style issues with ruff
 
 typecheck: ## Run mypy type checks
 	$(PYTHON) -m mypy app
+
+audit: ## Check locked dependencies for known vulnerabilities (same check as CI)
+	$(PYTHON) -m pip install -q pip-audit==2.9.0
+	@today=$$(date +%F); \
+	ignores=$$(awk -v today="$$today" '/^(CVE-|GHSA-)/ { split($$2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $$1 }' .trivyignore); \
+	for f in api ui dev; do \
+		$(PYTHON) scripts/filter_requirements_for_audit.py requirements/$$f.txt /tmp/audit-$$f.txt; \
+		$(PYTHON) -m pip_audit --require-hashes --disable-pip $$ignores -r /tmp/audit-$$f.txt; \
+	done
 
 # ── Evaluations ────────────────────────────────────────────────────────────────
 

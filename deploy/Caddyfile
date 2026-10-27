@@ -1,10 +1,17 @@
 # TLS-terminating reverse proxy for the compose stack: the only service published on the host.
 #   https://<SITE_ADDRESS>/        → Streamlit UI
-#   https://<SITE_ADDRESS>/api/... → API (e.g. /api/screenings, /api/health)
+#   https://<SITE_ADDRESS>/api/... → API (e.g. /api/v1/screenings, /api/health)
 # SITE_ADDRESS=localhost (default) uses Caddy's own local CA: browsers warn until it is trusted.
 # A public domain name pointing at this host gets a Let's Encrypt certificate automatically.
 {$SITE_ADDRESS:localhost} {
 	encode zstd gzip
+
+	# Screenings routes carry their own /api/v1 prefix in the app (the UI also calls them directly,
+	# unproxied, at that same path), so this block forwards the path unchanged instead of stripping
+	# it. Caddy prioritizes the more specific matcher, so this wins over handle_path /api/* below.
+	handle /api/v1/* {
+		reverse_proxy api:8000
+	}
 
 	handle_path /api/* {
 		# Metrics are for the internal network (scrape api:8000/metrics), never the internet.
