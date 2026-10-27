@@ -3,8 +3,8 @@
 # do not apply to this file, so only the unscoped ones have examples here.
 import logging
 
-from app.core import prompts
-from app.core.llm import structured_call
+from app.llms.llm_factory import structured_call
+from app.prompts import screening_prompts as prompts
 
 logger = logging.getLogger(__name__)
 

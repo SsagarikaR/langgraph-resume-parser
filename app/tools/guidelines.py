@@ -9,8 +9,8 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
-from app.core import prompts
-from app.core.llm import get_tool_llm
+from app.llms import get_tool_llm
+from app.prompts import guideline_prompts as prompts
 from app.tools.knowledge_tools import NO_RESULTS, SEARCH_FAILED, lookup_interview_guideline
 
 logger = logging.getLogger(__name__)

@@ -2,8 +2,8 @@
 
 from langgraph.types import StateSnapshot
 
-from app.core.config import get_settings
-from app.services.exceptions import ScreeningNotFoundError
+from app.config.settings import get_settings
+from app.exceptions.domain import ScreeningNotFoundError
 
 # The fields of a view that GET /screenings lists
 SUMMARY_FIELDS = ("status", "candidate", "job_title", "match_percentage")

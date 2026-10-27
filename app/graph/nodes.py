@@ -6,12 +6,12 @@ from pathlib import Path
 
 from langgraph.types import interrupt
 
-from app.core import prompts
-from app.core.config import get_settings
-from app.core.llm import structured_call
-from app.graph.exceptions import InvalidInputError
+from app.config.settings import get_settings
+from app.exceptions.domain import InvalidInputError
 from app.graph.matching import candidate_skills, is_met, mentioned, role_months, unverified_skills
 from app.graph.state import ResumeState
+from app.llms import structured_call
+from app.prompts import screening_prompts as prompts
 from app.schemas.analysis import GapAnalysis, InterviewQuestionSet
 from app.schemas.job import JobRequirements
 from app.schemas.resume import ResumeProfile

@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # ---- Guideline search ----
     guideline_top_k: int = Field(4, gt=0)  # chunks returned per search
     guideline_min_score: float = Field(0.6, ge=0, le=1)  # cosine similarity cut-off
+    guideline_relative_margin: float = Field(0.15, ge=0, le=1)  # drop hits this far below the best match
 
     # ---- Data retention (resumes are personal data) ----
     retention_days: int = Field(30, ge=0)  # erase screenings idle this long; 0 = keep forever

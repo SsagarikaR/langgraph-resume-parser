@@ -26,7 +26,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader
 
-from app.core.config import KEY_HASH_PREFIX, get_settings
+from app.config.settings import KEY_HASH_PREFIX, get_settings
 
 API_KEY_HEADER = "X-API-Key"
 ACTING_USER_HEADER = "X-Acting-User"

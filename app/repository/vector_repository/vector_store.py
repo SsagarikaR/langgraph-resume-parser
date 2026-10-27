@@ -20,7 +20,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
 
-from app.core.config import BASE_DIR, get_settings
+from app.config.settings import BASE_DIR, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ COLLECTION = "interview_guidelines"
 # (not caught by the vector-size check alone) still triggers a rebuild instead of leaving stale,
 # semantically mismatched vectors in place indefinitely.
 _MODEL_MARKER_PATH = BASE_DIR / ".qdrant_embedding_model"
-# Coordinates `ingest()` (can run as a separate `python -m app.knowledge.ingest` process) with
+# Coordinates `ingest()` (can run as a separate `python -m app.repository.vector_repository.ingest` process) with
 # `search()`/`ensure_index()` in the API process, so a search never reads mid-rebuild.
 _LOCK_PATH = BASE_DIR / ".qdrant_ingest.lock"
 
@@ -178,7 +178,12 @@ def _embed_query_cached(query: str) -> tuple[float, ...]:
 
 
 def search(query: str) -> list[dict]:
-    """Closest guideline chunks to `query`, using the configured count and score cut-off."""
+    """Closest guideline chunks to `query`, using the configured count and score cut-off.
+
+    Besides the absolute `guideline_min_score` cut-off, a hit is also dropped if it trails the
+    best match for this query by more than `guideline_relative_margin`: once one chunk is clearly
+    the best answer, a merely-passable tail hit only dilutes the summary the LLM is asked to write.
+    """
     settings = get_settings()
     ensure_index()
     vector = list(_embed_query_cached(query))
@@ -186,4 +191,8 @@ def search(query: str) -> list[dict]:
         result = get_client().query_points(
             COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
         )
-    return [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
+    hits = [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
+    if not hits:
+        return hits
+    best = hits[0]["score"]
+    return [h for h in hits if h["score"] >= best - settings.guideline_relative_margin]

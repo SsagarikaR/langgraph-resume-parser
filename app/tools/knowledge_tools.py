@@ -2,7 +2,7 @@ import logging
 
 from langchain_core.tools import tool
 
-from app.knowledge.vector_store import search
+from app.repository.vector_repository.vector_store import search
 
 logger = logging.getLogger(__name__)
 

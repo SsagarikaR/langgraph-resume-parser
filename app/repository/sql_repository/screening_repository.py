@@ -9,7 +9,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StateSnapshot
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.graph.state import config_for
 from app.utils.files import safe_filename, write_private
 
