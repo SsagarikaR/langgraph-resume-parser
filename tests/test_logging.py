@@ -1,7 +1,7 @@
 import json
 import logging
 
-from app.core.logging import JsonFormatter, RequestIdFilter, request_id
+from app.config.logging import JsonFormatter, RequestIdFilter, request_id
 
 
 def record(message="hello"):

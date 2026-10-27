@@ -3,7 +3,7 @@ import logging
 from contextvars import ContextVar
 from datetime import datetime, timezone
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 
 LOG_FORMAT = "%(asctime)s %(levelname)s [%(name)s] [%(request_id)s] %(message)s"
 

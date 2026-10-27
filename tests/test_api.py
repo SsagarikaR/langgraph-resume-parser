@@ -10,18 +10,18 @@ from typing import ClassVar
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api import main
-from app.api.deps import get_service
-from app.api.main import create_app
-from app.api.routes import health
-from app.core.config import get_settings
+from app import main
+from app.config.settings import get_settings
 from app.core.metrics import metrics
-from app.services.exceptions import (
+from app.exceptions.domain import (
     ScreeningBusyError,
     ScreeningNotFoundError,
     ServerBusyError,
     WorkflowFailedError,
 )
+from app.main import create_app
+from app.routes import health_routes as health
+from app.utils.deps import get_service
 
 PDF_UPLOAD = {"resume": ("cv.pdf", b"%PDF-1.7", "application/pdf")}
 JD_FORM = {"jd_text": "x" * 100}
@@ -430,7 +430,7 @@ def test_metrics_can_be_turned_off(monkeypatch):
 def test_the_request_log_names_the_caller(client, recording, monkeypatch, caplog):
     monkeypatch.setenv("API_KEYS", f"ui:{UI_KEY}")
     get_settings.cache_clear()
-    with caplog.at_level(logging.INFO, logger="app.api.middleware"):
+    with caplog.at_level(logging.INFO, logger="app.middleware.middleware"):
         client.delete("/screenings/abc", headers={"X-API-Key": UI_KEY, "X-Acting-User": "alice"})
     assert "(caller: ui/alice)" in caplog.text
 
@@ -513,10 +513,13 @@ def test_ordinary_reviewer_names_are_accepted(client, recording):
     assert r.status_code == 200
 
 
-def test_importing_the_api_package_does_not_build_the_app():
+def test_importing_the_middleware_and_routes_modules_does_not_build_the_app():
     # Without GEMINI_API_KEY, building the app fails: importing a module must not build it
     env = {"PATH": "/usr/bin:/bin", "GEMINI_API_KEY": ""}
-    code = "import app.api.auth, app.api.rate_limit; import sys; sys.exit('app.api.main' in sys.modules)"
+    code = (
+        "import app.middleware.auth, app.middleware.rate_limit, app.utils.deps; "
+        "import sys; sys.exit('app.main' in sys.modules)"
+    )
     run = subprocess.run([sys.executable, "-c", code], env=env, check=False)  # noqa: S603  # fixed command
     assert run.returncode == 0
 
@@ -685,7 +688,7 @@ def test_an_unhandled_error_is_counted_and_logged_as_500(test_app, monkeypatch, 
     try:
         with (
             TestClient(test_app, raise_server_exceptions=False) as c,
-            caplog.at_level(logging.INFO, "app.api.middleware"),
+            caplog.at_level(logging.INFO, "app.middleware.middleware"),
         ):
             assert c.get("/screenings/abc").status_code == 500
             body = c.get("/metrics").text
