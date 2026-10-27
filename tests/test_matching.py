@@ -1,6 +1,6 @@
 import pytest
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.graph.edges import route_after_matching, route_after_questions, route_after_review
 from app.graph.matching import (
     candidate_skill_names,

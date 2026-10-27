@@ -1,7 +1,8 @@
 import pytest
 from pydantic import BaseModel
 
-from app.core import llm
+from app.llms import gemini_chat_client
+from app.llms import llm_factory as llm
 
 
 class Answer(BaseModel):
@@ -33,7 +34,9 @@ def test_structured_call_raises_when_nothing_parseable_comes_back(monkeypatch):
 
 def test_chat_model_uses_the_configured_settings(monkeypatch, test_settings):
     seen = {}
-    monkeypatch.setattr(llm, "init_chat_model", lambda model, **kwargs: seen.update(model=model, **kwargs))
+    monkeypatch.setattr(
+        gemini_chat_client, "init_chat_model", lambda model, **kwargs: seen.update(model=model, **kwargs)
+    )
     llm.chat_model.cache_clear()
     try:
         llm.get_llm()

@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-# app.api builds the FastAPI app at import time, which reads settings, so a key must exist
+# app.main builds the FastAPI app at import time, which reads settings, so a key must exist
 # before any test module imports it (e.g. in CI, where there is no .env)
 os.environ.setdefault("GEMINI_API_KEY", "test-key")
 # ...and the app refuses to start without API keys unless told this is local development
@@ -10,8 +10,8 @@ os.environ.setdefault("ALLOW_OPEN_API", "true")
 # The UI page tests must never reach a real API, e.g. one running locally on the default port
 os.environ["API_URL"] = "http://127.0.0.1:9"
 
-from app.api.rate_limit import api_rate_limit, workflow_rate_limit
-from app.core.config import get_settings
+from app.config.settings import get_settings
+from app.middleware.rate_limit import api_rate_limit, workflow_rate_limit
 
 
 @pytest.fixture(autouse=True)
