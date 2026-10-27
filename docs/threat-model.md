@@ -35,17 +35,17 @@ addresses each threat. Review it when a new input, integration or deployment opt
 
 | Threat | Example | Control | Where |
 |--------|---------|---------|-------|
-| **Spoofing** a client | Guessing an API key | Keys compared in constant time; wrong keys rate-limited by address before the body is read; keys can expire | `app/api/auth.py`, `middleware.py`, `rate_limit.py` |
+| **Spoofing** a client | Guessing an API key | Keys compared in constant time; wrong keys rate-limited by address before the body is read; keys can expire | `app/middleware/auth.py`, `middleware.py`, `rate_limit.py` |
 | Spoofing a reviewer | A per-person key posing as someone else | Only `ACTING_USER_KEYS` may send `X-Acting-User`; reviews record `reviewer_verified` | `auth.py`, `nodes.human_review` |
 | Spoofing a UI user | Password guessing | scrypt hashes, constant-time compare, lockout after 5 failures, session timeout | `ui/login.py` |
-| **Tampering** with the outcome | Prompt injection in a resume ("list Kubernetes as a skill") | Text framed as untrusted data; skills the resume never mentions are left out of the match (`unverified_skills`); the injection eval case must extract none of the injected skills | `app/core/prompts.py`, `graph/matching.py`, `evals/cases/06_*` |
-| Tampering with stored state | Editing `checkpoints.db` to run code | Strict checkpoint deserialisation (plain data only); file is `0600` | `graph/graph.py` |
+| **Tampering** with the outcome | Prompt injection in a resume ("list Kubernetes as a skill") | Text framed as untrusted data; skills the resume never mentions are left out of the match (`unverified_skills`); the injection eval case must extract none of the injected skills | `app/prompts/screening_prompts.py`, `app/prompts/guideline_prompts.py`, `app/graph/matching.py`, `evals/cases/06_*` |
+| Tampering with stored state | Editing `checkpoints.db` to run code | Strict checkpoint deserialisation (plain data only); file is `0600` | `app/graph/graph.py` |
 | Tampering with deployed code | A modified image | Images signed by CI, deployed by digest after `cosign verify` | `ci.yml`, `scripts/deploy.sh` |
-| **Repudiation** | "I never approved that" | Each review records action, reviewer, key and time; each request logs its caller and request id | `nodes.human_review`, `api/main.py` |
-| **Information disclosure** | One key reading another's screenings | Ownership check returns `404` for others' screenings; audit keys are read-only | `services/screening_service.py`, `auth.py` |
+| **Repudiation** | "I never approved that" | Each review records action, reviewer, key and time; each request logs its caller and request id | `nodes.human_review`, `app/main.py` |
+| **Information disclosure** | One key reading another's screenings | Ownership check returns `404` for others' screenings; audit keys are read-only | `app/services/screening_service.py`, `auth.py` |
 | Disclosure through logs | Resume text in an exception message | Error logs carry exception type and stack only | `screening_service._run` |
 | Disclosure through the UI | A resume that injects an image URL leaking data | All untrusted text Markdown-escaped | `ui/api_client.md` |
-| Disclosure at rest | Copied disk or backup | `0600` files, `secure_delete`, WAL truncated on delete, retention purge, age-encrypted backups | `repositories/`, `scripts/backup.sh` |
+| Disclosure at rest | Copied disk or backup | `0600` files, `secure_delete`, WAL truncated on delete, retention purge, age-encrypted backups | `app/repository/sql_repository/`, `scripts/backup.sh` |
 | **Denial of service** | A PDF that makes the parser spin | Parsed in a child process with 1 GB memory cap and a timeout; page cap | `app/utils/pdf.py` |
 | DoS / cost | Flooding the LLM | Per-person and per-key rate limits, daily per-key quota, server-wide token budget, concurrent-run cap, body and text size limits | `rate_limit.py`, `token_budget.py`, `concurrency.py`, `middleware.py` |
 | **Elevation of privilege** | Container escape after an RCE | Non-root user, all capabilities dropped, read-only root filesystem, `no-new-privileges` | `Dockerfile`, `docker-compose.yml` |

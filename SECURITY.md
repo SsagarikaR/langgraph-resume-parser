@@ -27,7 +27,7 @@ Only the latest commit on `main` (and the image CI published from it) is support
   commit was never pushed.
 - **In production, prefer a cloud secrets manager to `.env` on the host.** `scripts/fetch_secrets.sh`
   fetches from AWS Secrets Manager, GCP Secret Manager or Vault into `/run/secrets/<name>`, which
-  the app already reads ahead of the environment (see `app/core/config.py`). Details:
+  the app already reads ahead of the environment (see `app/config/settings.py`). Details:
   [docs/operations.md](docs/operations.md#secrets).
 - **No real personal data in the repository, tests, issues or chats.** Test with the synthetic
   resumes in `data/resumes/` and `evals/fixtures/` (`example.com` addresses). A bug report that needs
@@ -35,8 +35,8 @@ Only the latest commit on `main` (and the image CI published from it) is support
 - **Dependencies** are hash-locked (`requirements/`); add or upgrade them only through
   `scripts/lock.sh`, and read the changelog of anything security-relevant. CI fails on known fixable
   vulnerabilities; an accepted one goes in `.trivyignore` with a reason and an expiry.
-- **Review** every change before it reaches `main`, and treat any change to `app/api/auth.py`,
-  `app/api/middleware.py`, `app/core/prompts.py`, `app/utils/pdf.py`, the Dockerfile, compose files
+- **Review** every change before it reaches `main`, and treat any change to `app/middleware/auth.py`,
+  `app/middleware/middleware.py`, `app/prompts/screening_prompts.py`, `app/prompts/guideline_prompts.py`, `app/utils/pdf.py`, the Dockerfile, compose files
   or CI as security-relevant: it needs a second reader and a test of the protection it touches.
 - **Uploads and LLM output are untrusted.** New prompts wrap uploaded text with `as_document()` and
   carry the untrusted-data rule; new UI text from uploads or the LLM goes through `md()`.

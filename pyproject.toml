@@ -42,7 +42,7 @@ dev = [
 
 [project.scripts]
 resume-screener = "app.cli:main"
-resume-screener-ingest = "app.knowledge.ingest:main"
+resume-screener-ingest = "app.repository.vector_repository.ingest:main"
 
 [tool.setuptools.packages.find]
 include = ["app*", "ui*"]

@@ -48,7 +48,7 @@ injection in the resume, counterfactual fairness pairs and, optionally, the inte
 
 ## LLM call flow
 
-Each workflow node that calls the LLM uses one of two patterns from `app/core/llm.py`:
+Each workflow node that calls the LLM uses one of two patterns from `app/llms/llm_factory.py` (model creation itself lives in `app/llms/gemini_chat_client.py`):
 
 ```mermaid
 flowchart TD
@@ -345,7 +345,7 @@ instead of local mode, and keeps checkpoints, reports and uploads in the `screen
 Compose pins those storage paths, so the host paths in `.env` do not apply inside the container
 (with plain `docker run --env-file .env`, leave them out of that file). Qdrant is not published to
 the host; only the API reaches it, over the compose network, once its healthcheck passes. The guideline
-index is built on the first search. To rebuild it: `docker compose exec api python -m app.knowledge.ingest`.
+index is built on the first search. To rebuild it: `docker compose exec api python -m app.repository.vector_repository.ingest`.
 
 Builds are reproducible: images install hash-pinned lockfiles (`requirements/*.txt`, generated from
 `pyproject.toml` by `scripts/lock.sh`; rerun it after changing dependencies) on a base image pinned by
@@ -371,7 +371,7 @@ CI (`.github/workflows/ci.yml`), with every action pinned by commit SHA:
 
 - lint, type checks and tests (coverage must stay at 80% or more) on Python 3.10 and 3.12, installed from the lockfile;
 - gitleaks over the whole git history and the Semgrep project rules in `semgrep/rules.yaml` (settings
-  only via `get_settings()`, LLMs only via `app/core/llm.py`, uploads fenced with `as_document`, no
+  only via `get_settings()`, LLMs only via `app/llms/llm_factory.py` or `app/llms/gemini_chat_client.py`, uploads fenced with `as_document`, no
   secrets or resume text in logs);
 - `pip-audit` of the lockfiles and a Trivy scan of both images (fixable HIGH/CRITICAL issues fail the build;
   accepted ones are listed with reasons and an expiry in `.trivyignore`), also weekly for new advisories;
@@ -405,12 +405,18 @@ Dependabot proposes updates for the pinned actions and base image.
 | `semgrep/`, `.gitleaks.toml` | Project Semgrep rules (with their tests) and the gitleaks allowlist |
 | `docker-compose.monitoring.yml`, `deploy/prometheus/`, `deploy/grafana/` | Optional Prometheus + Grafana overlay |
 | `app/cli.py` | Command-line runner (`resume-screener`) |
-| `app/core/` | Settings (`config.py`, from env/.env), logging, metrics, LLM prompts and the lazily created chat model with its optional fallback (`llm.py`) |
+| `app/config/` | Settings (`settings.py`, from env/.env) |
+| `app/core/` | Logging, metrics |
+| `app/llms/` | The lazily created chat model with its optional fallback (`llm_factory.py`, `gemini_chat_client.py`) |
+| `app/prompts/` | LLM prompts: `screening_prompts.py` (resume/job/matching/gap-analysis/question-generation), `guideline_prompts.py` (guideline research) |
+| `app/exceptions/` | Domain exception classes (`domain.py`) and the FastAPI exception handler (`handlers.py`) |
 | `app/graph/` | State, nodes, routing, the compiled graph and `runner.py`, which executes it; `matching.py` (skill and experience scoring) holds the logic the nodes use |
-| `app/schemas/` | Resume, job and analysis models the LLM fills (structured output); HTTP request/response models are in `app/api/schemas.py` |
-| `app/knowledge/`, `app/tools/` | Qdrant guideline store; `tools/` holds the LLM tool that searches it (`knowledge_tools.py`) and the tool-calling loop that drives it (`guidelines.py`, run by the `research_guidelines` step) |
+| `app/schemas/` | Resume, job and analysis models the LLM fills (structured output); HTTP request/response models are in `app/schemas/api_schemas.py` |
+| `app/repository/vector_repository/`, `app/tools/` | Qdrant guideline store; `tools/` holds the LLM tool that searches it (`knowledge_tools.py`) and the tool-calling loop that drives it (`guidelines.py`, run by the `research_guidelines` step) |
 | `app/utils/` | Small helpers with no LLM: PDF text extraction, safe report filenames |
-| `app/repositories/` | Stored state: the checkpointer, the app's `screenings` table (ownership, creation time, listing summary), uploads and exported reports. Gets the compiled graph passed in |
+| `app/repository/sql_repository/` | Stored state: the checkpointer, the app's `screenings` table (ownership, creation time, listing summary), uploads and exported reports. Gets the compiled graph passed in |
 | `app/services/` | Business logic, no HTTP: `screening_service.py` (operations and `create_service()` wiring), `concurrency.py` (per-screening lock, run slots, `HeldRun`), `inputs.py` (upload, JD, breakpoint and skill-correction checks), `token_budget.py`, `views.py` (state → client view), `run_stats.py` (per-run cost line and metrics) |
-| `app/api/` | FastAPI app factory, routes, request/response schemas, API key auth and rate limiting |
+| `app/routes/` | HTTP routes: health/readiness (`health_routes.py`), screenings (`screening_routes.py`) |
+| `app/middleware/` | API key auth (`auth.py`), rate limiting (`rate_limit.py`), body-size-limit middleware (`middleware.py`) |
+| `app/main.py` | FastAPI app factory (`create_app()`) and the `app` instance |
 | `ui/` | Streamlit client of the API: `streamlit_app.py` (pages), `api_client.py` (HTTP calls), `login.py` (sign-in) |

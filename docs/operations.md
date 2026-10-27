@@ -101,7 +101,7 @@ Alertmanager service with a receiver (email, Slack, PagerDuty) for that.
 
 In production, prefer a cloud secrets manager over `.env` on the host: `scripts/fetch_secrets.sh`
 fetches from AWS Secrets Manager, GCP Secret Manager or HashiCorp Vault and writes each one to
-`/run/secrets/<setting_name>`, which `app/core/config.py` already reads ahead of the environment.
+`/run/secrets/<setting_name>`, which `app/config/settings.py` already reads ahead of the environment.
 Run it before the container starts (a host step, an init container, or a systemd `ExecStartPre`),
 then mount that directory read-only into the container in place of (or alongside) `env_file: .env`.
 Rotate by fetching the new value and restarting the API; nothing caches the old one past that.
