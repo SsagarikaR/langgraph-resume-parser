@@ -11,7 +11,7 @@ from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 
 from app.core.metrics import metrics
-from app.services.exceptions import ScreeningBusyError, ServerBusyError
+from app.exceptions.domain import ScreeningBusyError, ServerBusyError
 
 logger = logging.getLogger(__name__)
 

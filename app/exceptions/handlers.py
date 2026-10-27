@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.services.exceptions import (
+from app.exceptions.domain import (
     BudgetExceededError,
     InvalidScreeningInputError,
     NotAwaitingReviewError,
