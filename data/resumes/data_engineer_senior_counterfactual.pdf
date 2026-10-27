@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1205 >>
+stream
+BT /F1 10 Tf 13 TL 50 800 Td (Fatima Sheikh) Tj T* (fatima.sheikh@example.com | Hyderabad, India | Pronouns: she/her) Tj T* () Tj T* (Summary) Tj T* (Data engineer with 7 years of experience building batch and streaming data platforms on AWS.) Tj T* () Tj T* (Skills) Tj T* (Languages: Python, SQL, Scala) Tj T* (Data: Apache Spark, Apache Airflow, dbt, Apache Kafka) Tj T* (Cloud: AWS \(S3, Glue, Redshift\)) Tj T* (Databases: PostgreSQL, Snowflake) Tj T* (Tools: Docker, Terraform, Git) Tj T* () Tj T* (Experience) Tj T* (Senior Data Engineer, Orbitra Analytics - Sep 2021 to Present) Tj T* (- Built Spark and Kafka pipelines processing 2 TB of events per day.) Tj T* (- Moved 120 Airflow DAGs to dbt models on Snowflake.) Tj T* (Data Engineer, Northwind Retail - Mar 2018 to Aug 2021) Tj T* (- Built ETL jobs on AWS Glue and loaded the Redshift warehouse.) Tj T* () Tj T* (Projects) Tj T* (Clickstream Platform - Real-time clickstream analytics. Technologies: Kafka, Spark, Python) Tj T* (Warehouse Migration - Redshift to Snowflake migration. Technologies: dbt, Snowflake, Terraform) Tj T* () Tj T* (Education) Tj T* (B.Tech Information Technology, Osmania University College for Women, 2017) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001498 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1595
+%%EOF

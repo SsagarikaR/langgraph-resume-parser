@@ -1,0 +1,24 @@
+Alex Morgan
+alex.morgan@example.com | Pune, India
+
+Summary
+Frontend developer with 1.5 years of experience building responsive web apps in React.
+
+Skills
+Languages: JavaScript, TypeScript, HTML, CSS
+Frameworks and libraries: React, Redux, Tailwind CSS
+Testing and tools: Jest, Git, Webpack
+
+Experience
+Frontend Developer, Brightleaf Studio - Jan 2024 to Present
+- Built and maintained customer dashboards in React and TypeScript.
+- Wrote unit tests with Jest and cut page load time by 30%.
+Frontend Intern, Brightleaf Studio - Jun 2023 to Dec 2023
+- Converted Figma designs into reusable React components.
+
+Projects
+Portfolio Site - Personal portfolio with a blog. Technologies: React, TypeScript, Tailwind CSS
+Weather Now - Weather app using a public weather API. Technologies: JavaScript, HTML, CSS
+
+Education
+B.E. Computer Engineering, Savitribai Phule Pune University, 2023

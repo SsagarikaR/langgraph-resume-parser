@@ -1,0 +1,40 @@
+# Alert rules on the API's metrics; no notifications wired up yet (needs Alertmanager)
+groups:
+  - name: resume-screener
+    rules:
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus cannot scrape the API
+
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Over 5% of API requests fail with a 5xx
+
+      - alert: ScreeningRunsFailing
+        expr: sum(increase(screening_runs_total{outcome="failed"}[30m])) > 3
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanize }} screening runs failed in 30 minutes (check the API logs)"
+
+      - alert: RunSlotsSaturated
+        # MAX_CONCURRENT_RUNS=8: new runs are being refused with 503
+        expr: screening_runs_in_progress >= 8
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Every workflow run slot has been busy for 10 minutes
+
+      - alert: TokenBudgetNearlySpent
+        # 80% of DAILY_TOKEN_BUDGET=5000000 over the same rolling 24 hours the API counts
+        expr: sum(increase(llm_tokens_total[24h])) > 4000000
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value | humanize }} LLM tokens in 24 hours: new runs stop at 5M"

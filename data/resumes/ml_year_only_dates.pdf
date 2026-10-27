@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 722 >>
+stream
+BT /F1 10 Tf 13 TL 50 800 Td (Arjun Nair) Tj T* (arjun.nair@example.com | Kochi, India) Tj T* () Tj T* (Skills) Tj T* (Python, PyTorch, scikit-learn, Docker, Kubernetes, GCP, MLflow, Git) Tj T* () Tj T* (Experience) Tj T* (Machine Learning Engineer, Corvid Health - 2022 to Present) Tj T* (- Trained PyTorch models, tracked experiments in MLflow and served them on Kubernetes in GCP.) Tj T* (Research Intern, Coastal Vision Lab - May 2021 to Aug 2021) Tj T* (- Built scikit-learn baselines for image retrieval.) Tj T* (Data Analyst, Tidewater Logistics - 2019 to 2021) Tj T* (- Built forecasting reports in Python.) Tj T* () Tj T* (Education) Tj T* (M.Tech Computer Science, Coastal Institute of Technology, 2022) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001014 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1111
+%%EOF

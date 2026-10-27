@@ -1,0 +1,46 @@
+# Known vulnerabilities accepted on purpose. Used by Trivy (image scan) and, by the CI audit job,
+# by pip-audit. Every entry needs a reason and an expiry (exp:), after which CI fails again.
+#
+# Pillow 12.x (fixed in 13.0.0): only in the UI image, pulled in by Streamlit, and every Streamlit
+# release so far (1.66.0) requires pillow<13. The UI never decodes an image (uploads are passed to
+# the API as raw bytes, and the API image has no Pillow), so the vulnerable code is not reachable.
+# Remove these once Streamlit allows pillow 13 and the lock is regenerated (scripts/lock.sh --upgrade).
+CVE-2026-112395 exp:2027-01-31
+CVE-2026-112397 exp:2027-01-31
+CVE-2026-112400 exp:2027-01-31
+CVE-2026-112404 exp:2027-01-31
+CVE-2026-112895 exp:2027-01-31
+CVE-2026-112896 exp:2027-01-31
+CVE-2026-112897 exp:2027-01-31
+CVE-2026-112899 exp:2027-01-31
+CVE-2026-112390 exp:2027-01-31
+CVE-2026-112392 exp:2027-01-31
+CVE-2026-112393 exp:2027-01-31
+CVE-2026-112399 exp:2027-01-31
+CVE-2026-112402 exp:2027-01-31
+CVE-2026-112403 exp:2027-01-31
+CVE-2026-112405 exp:2027-01-31
+CVE-2026-112406 exp:2027-01-31
+CVE-2026-112891 exp:2027-01-31
+CVE-2026-112892 exp:2027-01-31
+CVE-2026-112893 exp:2027-01-31
+CVE-2026-112894 exp:2027-01-31
+CVE-2026-112900 exp:2027-01-31
+CVE-2026-112902 exp:2027-01-31
+# pip-audit draws from a different advisory DB (OSV/PyPA) than Trivy, with only partial overlap
+# in CVE coverage for the same pillow release; same justification as above.
+GHSA-78g4-xqwv-q3g8 exp:2027-01-31
+CVE-2026-112391 exp:2027-01-31
+CVE-2026-112396 exp:2027-01-31
+CVE-2026-112401 exp:2027-01-31
+CVE-2026-112901 exp:2027-01-31
+CVE-2026-96636 exp:2027-01-31
+CVE-2026-96637 exp:2027-01-31
+CVE-2026-96638 exp:2027-01-31
+CVE-2026-96639 exp:2027-01-31
+CVE-2026-96640 exp:2027-01-31
+CVE-2026-96641 exp:2027-01-31
+CVE-2026-96642 exp:2027-01-31
+CVE-2026-96643 exp:2027-01-31
+CVE-2026-96644 exp:2027-01-31
+CVE-2026-96778 exp:2027-01-31

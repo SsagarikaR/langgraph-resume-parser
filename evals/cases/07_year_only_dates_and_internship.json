@@ -1,0 +1,20 @@
+{
+  "name": "ML engineer with year-only dates ('2022 to Present', '2019 to 2021') and an internship inside an older role vs the ML platform JD: strong match",
+  "resume": "data/resumes/ml_year_only_dates.pdf",
+  "jd": "data/jds/ml_platform.txt",
+  "expected": {
+    "resume_skills": [
+      "Python", "PyTorch", "scikit-learn", "Docker", "Kubernetes", "GCP or Google Cloud", "MLflow", "Git"
+    ],
+    "resume_optional_skills": ["Machine Learning", "forecasting", "image retrieval", "experiment tracking"],
+    "experience": [
+      {"start": "2022-01", "end": null},
+      {"start": "2021-05", "end": "2021-08"},
+      {"start": "2019-01", "end": "2021-01"}
+    ],
+    "jd_required_skills": ["Python", "PyTorch", "Kubernetes", "Docker", "GCP", "MLflow or Weights & Biases"],
+    "jd_optional_skills": ["Large Language Models", "Ray", "MLflow", "Weights & Biases", "model serving"],
+    "jd_required_years": null,
+    "route": "strong_match"
+  }
+}

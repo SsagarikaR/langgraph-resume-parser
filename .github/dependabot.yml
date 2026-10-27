@@ -1,0 +1,16 @@
+# Weekly update PRs for the pinned action SHAs and the Dockerfile's base-image digest.
+# Python packages are hash-locked in requirements/ (regenerate with scripts/lock.sh); the CI
+# audit job checks them weekly against known vulnerabilities.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

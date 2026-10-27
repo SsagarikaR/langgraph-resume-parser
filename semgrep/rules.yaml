@@ -1,0 +1,75 @@
+# Project rules Ruff cannot express: where configuration, models and untrusted text may go.
+# Run: semgrep scan --config semgrep/ --error app ui evals
+# Test: semgrep --test semgrep/   (each rule's examples are in rules.py, marked ruleid / ok)
+rules:
+  - id: env-read-outside-settings
+    message: >-
+      Read configuration through get_settings() (app/core/config.py), not the environment, so every
+      tunable is validated and documented in one place.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/app/"]
+      exclude: ["/app/core/config.py"]
+    pattern-either:
+      - pattern: os.getenv(...)
+      - pattern: os.environ
+      - pattern: os.environ.get(...)
+
+  - id: llm-outside-factory
+    message: >-
+      Create chat models in app/core/llm.py (chat_model, get_structured_llm, get_tool_llm): that is
+      where the key, timeout, retries and fallback model are applied.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/app/", "/evals/"]
+      exclude: ["/app/core/llm.py"]
+    pattern-either:
+      - pattern: init_chat_model(...)
+      - pattern: langchain.chat_models.init_chat_model(...)
+      - pattern: ChatGoogleGenerativeAI(...)
+      - pattern: langchain_google_genai.ChatGoogleGenerativeAI(...)
+
+  - id: upload-not-wrapped-as-document
+    message: >-
+      Uploaded resume / JD text goes to the model only inside prompts.as_document(...), which
+      fences it as untrusted data (prompt-injection defence).
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: structured_call($SCHEMA, $SYSTEM, $STATE["resume_text"])
+          - pattern: structured_call($SCHEMA, $SYSTEM, $STATE["job_description"])
+          - pattern: structured_call($SCHEMA, $SYSTEM, $STATE.get("resume_text", ...))
+          - pattern: structured_call($SCHEMA, $SYSTEM, $STATE.get("job_description", ...))
+
+  - id: secret-value-logged
+    message: Never log or print a secret's value; log the setting's name instead.
+    severity: ERROR
+    languages: [python]
+    pattern-either:
+      - pattern: print(..., <... $SECRET.get_secret_value() ...>, ...)
+      - patterns:
+          - pattern: $LOG.$METHOD(..., <... $SECRET.get_secret_value() ...>, ...)
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: ^(debug|info|warning|error|exception|critical|log)$
+
+  - id: candidate-text-logged
+    message: >-
+      Resume and job-description text is personal data and must not reach the logs; log the
+      screening id and sizes instead.
+    severity: ERROR
+    languages: [python]
+    paths:
+      include: ["/app/"]
+    patterns:
+      - pattern-either:
+          - pattern: $LOG.$METHOD(..., <... $STATE["resume_text"] ...>, ...)
+          - pattern: $LOG.$METHOD(..., <... $STATE["job_description"] ...>, ...)
+          - pattern: $LOG.$METHOD(..., <... $STATE.get("resume_text", ...) ...>, ...)
+          - pattern: $LOG.$METHOD(..., <... $STATE.get("job_description", ...) ...>, ...)
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(debug|info|warning|error|exception|critical|log)$

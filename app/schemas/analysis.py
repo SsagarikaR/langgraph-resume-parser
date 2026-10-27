@@ -21,6 +21,10 @@ class InterviewQuestion(BaseModel):
     why_asked: str = Field(description="What this question tests about the candidate")
     type: Literal["strength", "gap", "project", "behavioral"]
     difficulty: Literal["easy", "medium", "hard"]
+    # Set after the LLM call (never by the LLM itself): whether `topic` actually appears in the
+    # resume/job text, the same check unverified_skills applies to extracted resume skills. False
+    # flags a likely-invented topic for the reviewer, rather than letting it pass through silently.
+    topic_verified: bool = True
 
 
 class InterviewQuestionSet(BaseModel):

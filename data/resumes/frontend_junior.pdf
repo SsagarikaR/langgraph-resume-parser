@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1101 >>
+stream
+BT /F1 10 Tf 13 TL 50 800 Td (Alex Morgan) Tj T* (alex.morgan@example.com | Pune, India) Tj T* () Tj T* (Summary) Tj T* (Frontend developer with 1.5 years of experience building responsive web apps in React.) Tj T* () Tj T* (Skills) Tj T* (Languages: JavaScript, TypeScript, HTML, CSS) Tj T* (Frameworks and libraries: React, Redux, Tailwind CSS) Tj T* (Testing and tools: Jest, Git, Webpack) Tj T* () Tj T* (Experience) Tj T* (Frontend Developer, Brightleaf Studio - Jan 2024 to Present) Tj T* (- Built and maintained customer dashboards in React and TypeScript.) Tj T* (- Wrote unit tests with Jest and cut page load time by 30%.) Tj T* (Frontend Intern, Brightleaf Studio - Jun 2023 to Dec 2023) Tj T* (- Converted Figma designs into reusable React components.) Tj T* () Tj T* (Projects) Tj T* (Portfolio Site - Personal portfolio with a blog. Technologies: React, TypeScript, Tailwind CSS) Tj T* (Weather Now - Weather app using a public weather API. Technologies: JavaScript, HTML, CSS) Tj T* () Tj T* (Education) Tj T* (B.E. Computer Engineering, Savitribai Phule Pune University, 2023) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001394 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1491
+%%EOF

@@ -2,7 +2,16 @@
 
     python -m app.knowledge.ingest
 
-In local mode, stop the API server first: only one process can open ./qdrant_data at a time.
+A file lock (see vector_store._file_lock) keeps this from racing a concurrent search in the API
+process, but in local mode only one process can open ./qdrant_data at all, so stop the API server
+first regardless.
+
+Trust note: generate_questions puts this index's search results straight into the question-
+generation prompt as "company_interview_guidelines", without the extra <document>/UNTRUSTED_FIELDS
+wrapping given to resume and job-description text. That is safe only because these .md files are
+first-party, human-reviewed content versioned with the app. If this knowledge base is ever made
+editable by end users or synced from an external source (e.g. a wiki), treat its content as
+untrusted input in the prompt, the same as resume/JD text.
 """
 
 from app.core.config import get_settings

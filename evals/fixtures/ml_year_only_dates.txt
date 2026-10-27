@@ -1,0 +1,16 @@
+Arjun Nair
+arjun.nair@example.com | Kochi, India
+
+Skills
+Python, PyTorch, scikit-learn, Docker, Kubernetes, GCP, MLflow, Git
+
+Experience
+Machine Learning Engineer, Corvid Health - 2022 to Present
+- Trained PyTorch models, tracked experiments in MLflow and served them on Kubernetes in GCP.
+Research Intern, Coastal Vision Lab - May 2021 to Aug 2021
+- Built scikit-learn baselines for image retrieval.
+Data Analyst, Tidewater Logistics - 2019 to 2021
+- Built forecasting reports in Python.
+
+Education
+M.Tech Computer Science, Coastal Institute of Technology, 2022

@@ -1,0 +1,323 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly: new advisories against unchanged dependencies and images
+  workflow_dispatch:
+    inputs:
+      live_eval:
+        description: "Also run the evals against the real Gemini API (the eval environment's GEMINI_EVAL_API_KEY)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Actions are pinned by commit SHA (a tag can be moved); Dependabot keeps them current.
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23" # the uv scripts/lock.sh generates the lockfiles with
+          python-version: ${{ matrix.python-version }}
+          activate-environment: true # a .venv, on PATH for the steps below
+          enable-cache: true
+          cache-dependency-glob: requirements/dev.txt
+      - name: Install (hash-locked)
+        # sync: exactly the lockfile, every hash checked, nothing else left in the venv
+        run: |
+          uv pip sync --require-hashes requirements/dev.txt
+          uv pip install --no-deps -e .
+      - name: Lint
+        run: ruff check . && ruff format --check .
+      - name: Type check
+        run: mypy
+      - name: Test
+        # Tests mock the LLM and vector store, so no API key or network is needed
+        run: pytest --cov --cov-report=term
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit==2.9.0
+      - name: Known vulnerabilities in the locked Python dependencies
+        # --disable-pip: audit the lockfiles as written instead of re-resolving them. Accepted
+        # vulnerabilities (with their reasons) are listed once, in .trivyignore; expired ones count again.
+        # The lockfiles are --universal (one file for every supported Python), so a package pinned
+        # to different versions per Python version appears twice with mutually exclusive markers;
+        # pip-audit's static parser can't handle two lines for one name, so audit a copy filtered
+        # down to this job's own Python version instead (scripts/filter_requirements_for_audit.py).
+        # api/ui/dev are resolved independently (scripts/lock.sh), so a shared transitive dependency
+        # can legitimately land on a different pinned version in each file; pip-audit refuses a
+        # combined -r set with conflicting pins for the same package, so each file is audited on its own.
+        run: |
+          today=$(date +%F)
+          ignores=$(awk -v today="$today" '/^(CVE-|GHSA-)/ { split($2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $1 }' .trivyignore)
+          for f in api ui dev; do
+            python3 scripts/filter_requirements_for_audit.py requirements/$f.txt /tmp/audit-$f.txt
+            pip-audit --require-hashes --disable-pip $ignores -r /tmp/audit-$f.txt
+          done
+
+  # The pre-commit hooks can be skipped (--no-verify), so CI runs the same secret and rule checks
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # every commit: a secret removed in a later commit is still in the history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Secrets in the git history (gitleaks, .gitleaks.toml)
+        # The same version as the pre-commit hook, checked against its release checksum
+        run: |
+          version=8.28.0
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}"
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  ${archive}" | sha256sum -c -
+          tar xzf "$archive" gitleaks
+          ./gitleaks git . --redact --no-banner --exit-code 1
+      - run: pip install semgrep==1.182.0
+      - name: Project rules (semgrep/rules.yaml)
+        run: |
+          semgrep --test semgrep/
+          semgrep scan --config semgrep/ --error --metrics=off app ui evals
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build API image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          target: api
+          push: false
+          load: true
+          tags: resume-screener-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build UI image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          target: ui
+          push: false
+          load: true
+          tags: resume-screener-ui:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: resume-screener-api:ci
+          trivyignores: .trivyignore
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true # fail only on what an update can fix
+          exit-code: "1"
+      - name: Scan UI image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: resume-screener-ui:ci
+          trivyignores: .trivyignore
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Smoke test API image
+        # The app starts and answers /health as the non-root user (the keys are placeholders:
+        # the LLM is only created on first use, and the API refuses to start without an API key)
+        run: |
+          docker run -d --name api -p 8000:8000 -e GEMINI_API_KEY=ci-placeholder -e API_KEY=ci-api-key \
+            resume-screener-api:ci
+          for _ in $(seq 30); do curl -fs localhost:8000/health && exit 0; sleep 1; done
+          docker logs api
+          exit 1
+      - name: Smoke test UI image
+        run: |
+          docker run -d --name ui -p 8501:8501 resume-screener-ui:ci
+          for _ in $(seq 30); do curl -fs localhost:8501/_stcore/health && exit 0; sleep 1; done
+          docker logs ui
+          exit 1
+
+  # The whole compose stack as deployed: TLS proxy, hardened read-only containers, Qdrant with its
+  # key. Checks routing and protection end to end; no LLM call is made, so no Gemini key is needed.
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Start the stack
+        # The UI requires a scrypt hash (as ui/login.py hash makes), single-quoted so compose
+        # does not expand its "$" parts
+        run: |
+          ui_hash=$(python3 - <<'EOF'
+          import base64, hashlib, os
+          salt, encode = os.urandom(16), base64.urlsafe_b64encode
+          digest = hashlib.scrypt(b"ci-password", salt=salt, n=2**14, r=8, p=1)
+          print(f"scrypt${encode(salt).decode()}${encode(digest).decode()}")
+          EOF
+          )
+          {
+            echo "GEMINI_API_KEY=ci-placeholder"
+            echo "API_KEY=ci-api-key"
+            echo "QDRANT_API_KEY=ci-qdrant-key"
+            echo "UI_PASSWORD='$ui_hash'"
+            echo "GRAFANA_ADMIN_PASSWORD=ci-grafana-password"
+          } > .env
+          docker compose up -d --build --wait --wait-timeout 180
+      - name: Start Prometheus and Grafana (docker-compose.monitoring.yml)
+        run: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --wait --wait-timeout 60
+      - name: Check metrics are scraped and the dashboard is provisioned
+        run: |
+          set -x
+          target() { docker compose exec -T prometheus wget -qO- http://localhost:9090/api/v1/targets; }
+          health() { target | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["activeTargets"][0]["health"])'; }
+          # scrape_interval is 15s; a target reports "unknown" until its first scrape completes
+          for _ in $(seq 30); do [ "$(health)" = up ] && break; sleep 2; done
+          test "$(health)" = up
+          curl -ksf -u "admin:ci-grafana-password" http://localhost:3000/api/search | grep -q '"uid":"resume-screener"'
+      - name: Check routing and protection through the proxy
+        run: |
+          set -x
+          base=https://localhost
+          code() { curl -ks -o /dev/null -w '%{http_code}' "$@"; }
+          curl -ksf "$base/api/health" | grep -q '"ok"'
+          curl -ksf "$base/api/ready" | grep -q '"database":"ok","guidelines":"ok"'   # SQLite and Qdrant
+          test "$(code "$base/api/v1/screenings")" = 401                              # no key
+          test "$(code -H 'X-API-Key: ci-api-key' "$base/api/v1/screenings")" = 200   # with the key
+          test "$(code "$base/api/metrics")" = 404                                 # internal only
+          test "$(code "$base/api/docs")" = 404                                    # off with keys
+          curl -ksI "$base/" | grep -qi '^x-frame-options: deny'                   # UI headers
+          test "$(code http://localhost/)" = 308                                   # HTTP → HTTPS
+      - name: Back up and restore the database (the recovery drill)
+        # Plaintext here only because the CI database holds no resume; production backups are
+        # encrypted with age. A restore that cannot bring the API back healthy fails the build.
+        run: |
+          set -x
+          BACKUP_ALLOW_PLAINTEXT=true scripts/backup.sh backups
+          backup=$(ls backups/checkpoints-*.db)
+          scripts/restore.sh "$backup"
+          curl -ksf https://localhost/api/ready | grep -q '"database":"ok"'
+          test "$(curl -ks -o /dev/null -w '%{http_code}' -H 'X-API-Key: ci-api-key' https://localhost/api/v1/screenings)" = 200
+          # A damaged backup is refused before the live database is touched
+          echo "not a database" > backups/broken.db
+          if scripts/restore.sh backups/broken.db; then echo "a broken backup was restored" >&2; exit 1; fi
+          curl -ksf https://localhost/api/ready | grep -q '"database":"ok"'
+      - name: Logs
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml logs
+      - if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.monitoring.yml down -v
+
+  # Images for deployment, from main only, once every check above has passed. Each image is pushed
+  # under its commit tag, scanned and signed by digest, and only then tagged latest: what is
+  # deployed is exactly what was scanned.
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, audit, static-analysis, docker, compose]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing with the workflow's OIDC identity
+    strategy:
+      matrix:
+        target: [api, ui]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: name
+        # Registry names must be lowercase; the repository's owner may not be
+        env:
+          TARGET: ${{ matrix.target }}
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-${TARGET}" >> "$GITHUB_OUTPUT"
+      - id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        with:
+          images: ${{ steps.name.outputs.image }}
+          tags: type=sha
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+      - name: Scan the pushed image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+          trivyignores: .trivyignore
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign the image
+        # Verify with: cosign verify <image> --certificate-identity-regexp 'github.com/<owner>/<repo>'
+        #   --certificate-oidc-issuer https://token.actions.githubusercontent.com
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE"
+      - name: Tag it latest
+        env:
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE@$DIGEST"
+      - name: Remove the image if it failed its scan or was not signed
+        # It was pushed (under its commit tag) to be scanned by digest; it must not stay pullable.
+        # deploy.sh would refuse it anyway, being unsigned.
+        if: failure() && steps.build.outputs.digest != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.name.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          package="${IMAGE#ghcr.io/*/}"
+          owner="$GITHUB_REPOSITORY_OWNER"
+          if [ "$(gh api "users/$owner" --jq .type)" = Organization ]; then scope="orgs/$owner"; else scope="users/$owner"; fi
+          id=$(gh api --paginate "$scope/packages/container/$package/versions" --jq ".[] | select(.name == \"$DIGEST\") | .id")
+          gh api -X DELETE "$scope/packages/container/$package/versions/$id"
+          echo "Deleted $IMAGE@$DIGEST"
+
+  # Extraction quality against the real model: manual, because it costs API calls
+  live-eval:
+    if: github.event_name == 'workflow_dispatch' && inputs.live_eval
+    runs-on: ubuntu-latest
+    # Its own GitHub environment and Gemini key, from a separate project with a low quota: the
+    # evals never use (or exhaust) the production key, and the environment can require approval
+    environment: eval
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          python-version: "3.12"
+          activate-environment: true
+          enable-cache: true
+          cache-dependency-glob: requirements/dev.txt
+      - run: |
+          uv pip sync --require-hashes requirements/dev.txt
+          uv pip install --no-deps -e .
+      - name: Run evals
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_EVAL_API_KEY }}
+        run: python -m evals.run_eval --questions

@@ -1,0 +1,20 @@
+{
+  "name": "Career changer (6 yrs network admin, 1 yr DevOps) vs the ML platform JD: weak match on skills; every role counts as experience",
+  "resume": "data/resumes/career_changer_devops.pdf",
+  "jd": "data/jds/ml_platform.txt",
+  "expected": {
+    "resume_skills": [
+      "Linux", "Bash", "Python", "Git", "Docker", "Terraform", "AWS", "GitHub Actions", "Nginx",
+      "EC2 or AWS EC2 or Amazon EC2"
+    ],
+    "resume_optional_skills": ["Cisco", "CI/CD", "networking", "automation"],
+    "experience": [
+      {"start": "2024-09", "end": null},
+      {"start": "2018-02", "end": "2024-08"}
+    ],
+    "jd_required_skills": ["Python", "PyTorch", "Kubernetes", "Docker", "GCP", "MLflow or Weights & Biases"],
+    "jd_optional_skills": ["Large Language Models", "Ray", "MLflow", "Weights & Biases", "model serving"],
+    "jd_required_years": null,
+    "route": "weak_match"
+  }
+}
