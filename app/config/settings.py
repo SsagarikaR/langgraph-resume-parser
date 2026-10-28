@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
     llm_timeout_seconds: float = 120.0
     llm_max_retries: int = 3
+    # Consecutive structured-call failures (after each call's own retries/fallback) before the
+    # circuit opens and fails fast; and how long it stays open before allowing a trial call.
+    llm_circuit_failure_threshold: int = Field(5, ge=1)
+    llm_circuit_cooldown_seconds: float = Field(30.0, gt=0)
 
     # ---- Vector store (local mode in qdrant_path unless qdrant_url is set) ----
     qdrant_url: str | None = None

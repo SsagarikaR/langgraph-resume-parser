@@ -44,3 +44,12 @@ class BudgetExceededError(ServerBusyError):
     def __init__(self, message: str, retry_after: int):
         super().__init__(message)
         self.retry_after = retry_after
+
+
+class LlmUnavailableError(ServerBusyError):
+    """The LLM circuit breaker is open: too many consecutive failures, so this call was skipped
+    instead of being sent (and left to time out) while the provider is down."""
+
+    def __init__(self, message: str, retry_after: int):
+        super().__init__(message)
+        self.retry_after = retry_after

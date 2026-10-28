@@ -1,6 +1,9 @@
+import time
+
 import pytest
 from pydantic import BaseModel
 
+from app.exceptions import domain as llm_domain
 from app.llms import gemini_chat_client
 from app.llms import llm_factory as llm
 
@@ -94,3 +97,46 @@ def test_without_a_fallback_model_the_error_is_raised(models, monkeypatch):
     with pytest.raises(RuntimeError, match="main unavailable"):
         llm.structured_call(Answer, "s", "h")
     assert calls == ["main"]
+
+
+def test_circuit_opens_after_the_configured_number_of_failures(models, monkeypatch):
+    calls, failing = models
+    monkeypatch.setenv("GEMINI_MODEL", "main")
+    monkeypatch.setenv("LLM_CIRCUIT_FAILURE_THRESHOLD", "2")
+    monkeypatch.setenv("LLM_CIRCUIT_COOLDOWN_SECONDS", "60")
+    llm.get_settings.cache_clear()
+    llm._circuit_breaker.cache_clear()
+    failing.add("main")
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="main unavailable"):
+            llm.structured_call(Answer, "s", "h")
+
+    calls.clear()
+    with pytest.raises(llm_domain.LlmUnavailableError):
+        llm.structured_call(Answer, "s", "h")
+    assert calls == []  # the open circuit skipped calling the model at all
+
+
+def test_circuit_closes_again_after_a_success(models, monkeypatch):
+    _calls, failing = models
+    monkeypatch.setenv("GEMINI_MODEL", "main")
+    monkeypatch.setenv("LLM_CIRCUIT_FAILURE_THRESHOLD", "1")
+    monkeypatch.setenv("LLM_CIRCUIT_COOLDOWN_SECONDS", "0.01")
+    llm.get_settings.cache_clear()
+    llm._circuit_breaker.cache_clear()
+    failing.add("main")
+
+    with pytest.raises(RuntimeError, match="main unavailable"):
+        llm.structured_call(Answer, "s", "h")
+
+    time.sleep(0.02)  # let the cooldown elapse so the next call is a trial, not a skip
+    failing.discard("main")
+    llm.get_structured_llm.cache_clear()  # FakeChatModel snapshots `failing` at construction time
+    assert llm.structured_call(Answer, "s", "h") == Answer(text="main")
+
+    # the breaker reset on that success: another failure needs its own full threshold to reopen it
+    failing.add("main")
+    llm.get_structured_llm.cache_clear()
+    with pytest.raises(RuntimeError, match="main unavailable"):
+        llm.structured_call(Answer, "s", "h")

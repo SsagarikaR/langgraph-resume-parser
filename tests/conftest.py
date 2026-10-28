@@ -11,6 +11,7 @@ os.environ.setdefault("ALLOW_OPEN_API", "true")
 os.environ["API_URL"] = "http://127.0.0.1:9"
 
 from app.config.settings import get_settings
+from app.llms.llm_factory import _circuit_breaker
 from app.middleware.rate_limit import api_rate_limit, workflow_rate_limit
 
 
@@ -44,5 +45,7 @@ def test_settings(tmp_path, monkeypatch):
     get_settings.cache_clear()
     api_rate_limit.reset()
     workflow_rate_limit.reset()
+    _circuit_breaker.cache_clear()  # each test gets a fresh LLM circuit breaker, not one carried over
     yield get_settings()
     get_settings.cache_clear()
+    _circuit_breaker.cache_clear()

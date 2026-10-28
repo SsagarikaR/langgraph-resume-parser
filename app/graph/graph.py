@@ -11,7 +11,7 @@ from langgraph.types import RetryPolicy
 from pydantic import ValidationError
 
 from app.config.settings import get_settings
-from app.exceptions.domain import InvalidInputError
+from app.exceptions.domain import InvalidInputError, LlmUnavailableError
 from app.graph.edges import route_after_matching, route_after_questions, route_after_review
 from app.graph.nodes import (
     analyze_gaps,
@@ -27,8 +27,10 @@ from app.graph.nodes import (
 )
 from app.graph.state import ResumeState
 
-# Structural failures that a retry cannot fix; everything else (timeouts, 5xx, 429) retries
-NON_RETRYABLE = (InvalidInputError, ValidationError, KeyError, TypeError)
+# Structural failures that a retry cannot fix, plus the circuit breaker's own fail-fast signal
+# (retrying it just re-raises immediately until the cooldown elapses); everything else (timeouts,
+# 5xx, 429) retries
+NON_RETRYABLE = (InvalidInputError, ValidationError, KeyError, TypeError, LlmUnavailableError)
 
 
 def build_graph(db_path: Path | str) -> CompiledStateGraph:
