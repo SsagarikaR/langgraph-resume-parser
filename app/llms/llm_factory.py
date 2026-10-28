@@ -67,6 +67,18 @@ def _circuit_breaker() -> _CircuitBreaker:
     return _CircuitBreaker(settings.llm_circuit_failure_threshold, settings.llm_circuit_cooldown_seconds)
 
 
+# Set by ScreeningService to its TokenBudget.check, so every individual LLM call re-checks the
+# daily token ceiling, not just the one check done when a run starts. Without this, a run already
+# in progress (e.g. several reviewer-revision rounds) could keep calling the LLM well past the
+# budget between the start-of-run check and the end-of-run charge.
+_budget_check: Callable[[], None] | None = None
+
+
+def set_budget_checker(check: Callable[[], None] | None) -> None:
+    global _budget_check
+    _budget_check = check
+
+
 def get_llm() -> BaseChatModel:
     """The configured main chat model."""
     return chat_model(get_settings().gemini_model)
@@ -97,8 +109,12 @@ def structured_call(schema: type[ModelT], system: str, human: str) -> ModelT:
     """One system + human message to the model, returned as an instance of `schema`.
 
     Raises LlmUnavailableError without calling the model at all if recent calls have failed
-    enough in a row that the provider looks down (see _CircuitBreaker).
+    enough in a row that the provider looks down (see _CircuitBreaker), or BudgetExceededError
+    if the daily token budget was used up by other calls since this run started (see
+    `set_budget_checker`).
     """
+    if _budget_check is not None:
+        _budget_check()
     breaker = _circuit_breaker()
     breaker.before_call()
     try:
