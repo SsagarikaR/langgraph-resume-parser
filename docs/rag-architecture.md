@@ -4,6 +4,12 @@ How the interview-guideline retrieval pipeline is built, and where its design no
 This consolidates what was previously scattered across module docstrings; see those modules for
 the authoritative, line-level detail — this page is the map.
 
+**Scope note**: this is a resume-screening workflow, not a RAG chatbot. Retrieval here augments
+one step (`generate_questions`) with a small, first-party interview-guideline knowledge base; there
+is no retrieval over resumes/job descriptions themselves (those are read directly, not indexed).
+Treat the sizing choices below (tiny KB, in-process cache, single-collection search) as scoped to
+that use case, not as a general-purpose RAG design.
+
 ## Pipeline
 
 ```
@@ -31,14 +37,38 @@ generate_questions (graph node)                                         │
   cut-off (`GUIDELINE_MIN_SCORE`) and a relative margin (`GUIDELINE_RELATIVE_MARGIN`) that drops
   hits trailing the query's best match by more than that margin, so a merely-passable tail result
   doesn't dilute the summary alongside a clearly-best one. Query embeddings are cached
-  (`_embed_query_cached`) since screenings repeat the same skill names often.
+  (`_embed_query_cached`) since screenings repeat the same skill names often. `search()` also takes
+  optional `kind`/`source` keywords that apply a Qdrant payload filter (`_metadata_filter`), to
+  narrow a lookup to e.g. only "Red flag" chunks or one guideline file instead of always scanning
+  the whole collection.
+- **Reranking**: raw vector hits are re-scored as a vector/lexical blend (`_rerank`): cosine
+  similarity blurs exact-term matches into broader semantic neighborhoods, so a literal
+  token-overlap signal is blended in to keep a chunk that actually names the queried skill above
+  one that is merely topic-adjacent. The blend weight is `GUIDELINE_RERANK_VECTOR_WEIGHT`
+  (`app/config/settings.py`) — a config value, not a hardcoded constant, so it can be tuned against
+  the eval harness (see below) per deployment without a code change.
 - **Retrieval orchestration**: unlike a typical "embed query → top-k → stuff into prompt" RAG,
   this is tool-calling RAG: `app/tools/guidelines.gather_guidelines` gives the LLM a
   `lookup_interview_guideline` tool and lets it decide what to search for (one call per skill/area)
-  and when it has enough to summarize, up to `MAX_TOOL_ROUNDS`/`MAX_TOOL_CALLS` safety limits.
+  and when it has enough to summarize, up to `GUIDELINE_MAX_TOOL_ROUNDS`/`GUIDELINE_MAX_TOOL_CALLS`
+  safety limits (also config, not hardcoded module constants).
 - **Generation & grounding**: the summary becomes `company_interview_guidelines` in the
   `generate_questions` node's context (`app/graph/nodes.py`), feeding the `QUESTION_GENERATION`
   prompt in `app/prompts/screening_prompts.py`.
+- **Resilience of the LLM calls around retrieval**: every LLM call the graph makes, including the
+  tool-calling loop above, goes through `app/llms/llm_factory.py`, which wraps the call with a
+  per-request retry + fallback model (`with_fallback`), a process-wide circuit breaker
+  (`_CircuitBreaker`) that fails fast once calls have failed `LLM_CIRCUIT_FAILURE_THRESHOLD` times
+  in a row, and a daily token-budget check (`set_budget_checker`/`TokenBudget`) re-run before each
+  individual call — not just once at the start of a run — so a long multi-revision run still stops
+  calling the LLM the moment the budget is exhausted. A failed guideline search itself degrades
+  gracefully (`app/tools/knowledge_tools.py`): the screening completes without guidelines rather
+  than failing outright.
+- **Evaluation**: retrieval/generation quality is checked by the harness under `evals/` (see
+  `evals/README.md`) — precision/recall/F1 on extraction, route accuracy, prompt-injection
+  resistance and counterfactual fairness cases, and an LLM-judge score for generated questions.
+  Tune `GUIDELINE_RERANK_VECTOR_WEIGHT` and the score/margin cut-offs against that harness, not by
+  inspection alone.
 
 ## Trust boundaries
 
