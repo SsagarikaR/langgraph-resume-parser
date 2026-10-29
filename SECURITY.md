@@ -53,7 +53,7 @@ Anyone who runs the app with resumes on their own machine:
   `scripts/wipe_local_data.sh` with the API stopped as soon as the work is done, and deletes the
   original from Downloads and any chat it arrived through.
 - Does not run the local API with `ALLOW_OPEN_API=true` on a network others can reach: bind it to
-  localhost (`uvicorn app.api:app --host 127.0.0.1`, the default).
+  localhost (`uvicorn app.main:app --host 127.0.0.1`, the default).
 - Runs `scripts/wipe_local_data.sh` before the machine is handed over, sent for repair or retired.
 
 Shared test machines and CI runners hold no personal data and no production secrets: CI uses

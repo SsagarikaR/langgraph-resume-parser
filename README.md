@@ -84,7 +84,7 @@ cp .env.example .env          # then set GEMINI_API_KEY, and API_KEY (or ALLOW_O
 ## Run
 
 ```bash
-uvicorn app.api:app --reload              # API on :8000, docs at /docs (without API keys; see API_DOCS)
+uvicorn app.main:app --reload             # API on :8000, docs at /docs (without API keys; see API_DOCS)
 streamlit run ui/streamlit_app.py         # UI
 resume-screener start data/resumes/resume.pdf data/jds/jd.txt   # CLI (or python -m app.cli); prints the screening id
 resume-screener review <id>                                       # approve or revise; a completed one is saved to reports/

@@ -31,7 +31,7 @@ with st.sidebar:
         st.success(f"API connected: {API_URL}")
     else:
         st.error(f"API not reachable: {API_URL}")
-        st.caption("Start it with: `uvicorn app.api:app --reload`")
+        st.caption("Start it with: `uvicorn app.main:app --reload`")
     if not LOGIN_REQUIRED:
         st.caption("⚠️ UI_USERS / UI_PASSWORD is not set: anyone who can open this page can use it.")
     elif USER:
