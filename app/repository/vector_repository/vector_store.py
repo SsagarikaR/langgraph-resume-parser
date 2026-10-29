@@ -18,7 +18,7 @@ from pathlib import Path
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointIdsList, PointStruct, VectorParams
 
 from app.config.settings import BASE_DIR, get_settings
 
@@ -200,17 +200,40 @@ def _rerank(query: str, hits: list[dict]) -> list[dict]:
     `score` is kept as the raw cosine similarity (used for the absolute cut-off upstream);
     the blended value only decides final ordering and the relative-margin cut-off, so a
     lexically-matching chunk that's a near-tie on vector score can win the top slot.
+
+    The vector/lexical split is `guideline_rerank_vector_weight` (config, not a hardcoded
+    constant), so it can be tuned per deployment/eval run without a code change.
     """
+    vector_weight = get_settings().guideline_rerank_vector_weight
     query_tokens = _tokenize(query)
     reranked = [
-        {**h, "rerank_score": 0.7 * h["score"] + 0.3 * _lexical_overlap(query_tokens, h.get("text", ""))} for h in hits
+        {
+            **h,
+            "rerank_score": vector_weight * h["score"]
+            + (1 - vector_weight) * _lexical_overlap(query_tokens, h.get("text", "")),
+        }
+        for h in hits
     ]
     reranked.sort(key=lambda h: h["rerank_score"], reverse=True)
     return reranked
 
 
-def search(query: str) -> list[dict]:
+def _metadata_filter(kind: str | None, source: str | None) -> Filter | None:
+    """Qdrant payload filter restricting a search to one guideline `kind` (e.g. "Red flag") and/or
+    one source file, instead of always scanning the whole collection."""
+    conditions = []
+    if kind is not None:
+        conditions.append(FieldCondition(key="kind", match=MatchValue(value=kind)))
+    if source is not None:
+        conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
+    return Filter(must=conditions) if conditions else None
+
+
+def search(query: str, *, kind: str | None = None, source: str | None = None) -> list[dict]:
     """Closest guideline chunks to `query`, using the configured count and score cut-off.
+
+    `kind`/`source` narrow the search to a payload subset (e.g. only "Red flag" chunks, or only
+    one guideline file) via a Qdrant payload filter, instead of always searching every chunk.
 
     Besides the absolute `guideline_min_score` cut-off, a hit is also dropped if it trails the
     best match for this query by more than `guideline_relative_margin`: once one chunk is clearly
@@ -221,9 +244,14 @@ def search(query: str) -> list[dict]:
     settings = get_settings()
     ensure_index()
     vector = list(_embed_query_cached(query))
+    query_filter = _metadata_filter(kind, source)
     with _file_lock(exclusive=False):
         result = get_client().query_points(
-            COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
+            COLLECTION,
+            query=vector,
+            query_filter=query_filter,
+            limit=settings.guideline_top_k,
+            score_threshold=settings.guideline_min_score,
         )
     hits = [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
     if not hits:

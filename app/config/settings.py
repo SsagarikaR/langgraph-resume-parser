@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     guideline_top_k: int = Field(4, gt=0)  # chunks returned per search
     guideline_min_score: float = Field(0.6, ge=0, le=1)  # cosine similarity cut-off
     guideline_relative_margin: float = Field(0.15, ge=0, le=1)  # drop hits this far below the best match
+    guideline_rerank_vector_weight: float = Field(0.7, ge=0, le=1)  # weight on raw cosine score in the rerank blend
+    guideline_max_tool_rounds: int = Field(5, gt=0)  # safety limit on gather_guidelines tool-call loop iterations
+    guideline_max_tool_calls: int = Field(12, gt=0)  # safety limit on total lookup_interview_guideline calls
 
     # ---- Data retention (resumes are personal data) ----
     retention_days: int = Field(30, ge=0)  # erase screenings idle this long; 0 = keep forever
