@@ -94,8 +94,17 @@ datasource). See the README's Monitoring section for ports and access.
 
 Alerts already defined (`deploy/prometheus/alerts.yml`): the API unreachable; a high 5xx share;
 repeated failed screening runs; run slots saturated at `MAX_CONCURRENT_RUNS` for 10 minutes; the
-daily token budget (`DAILY_TOKEN_BUDGET`) 80% spent. None of them notify anyone yet — add an
-Alertmanager service with a receiver (email, Slack, PagerDuty) for that.
+daily token budget (`DAILY_TOKEN_BUDGET`) 80% spent. Prometheus routes them to an Alertmanager
+service (also started by `docker-compose.monitoring.yml`), which notifies `ALERTMANAGER_WEBHOOK_URL`
+(any Slack/Teams/PagerDuty incoming-webhook URL); critical alerts (`ApiDown`) repeat hourly, warnings
+every 4 hours. Set that variable in `.env` or the alerts stay firing with nowhere to go.
+
+### Tracing
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://otel-collector:4318`) to export one span per HTTP
+request — via `app/observability/tracing.py` — to an OTLP collector feeding Jaeger/Tempo/etc. Unset
+by default so local dev and CI never try to reach a collector. This is independent of the optional
+LangSmith tracing (`LANGSMITH_TRACING`), which traces inside the LangGraph workflow itself.
 
 ## Secrets
 
