@@ -1,9 +1,10 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from app.services.exceptions import (
+from app.exceptions.domain import (
     BudgetExceededError,
     InvalidScreeningInputError,
+    LlmUnavailableError,
     NotAwaitingReviewError,
     NotPausedError,
     ScreeningBusyError,
@@ -22,6 +23,7 @@ STATUS_CODES = {
     ScreeningBusyError: 409,
     ServerBusyError: 503,
     BudgetExceededError: 503,
+    LlmUnavailableError: 503,
     WorkflowFailedError: 500,
 }
 

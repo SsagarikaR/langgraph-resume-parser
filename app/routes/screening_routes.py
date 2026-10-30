@@ -2,9 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 
-from app.api.auth import Caller, ReadCaller, require_api_key
-from app.api.deps import ServiceDep, Stream, ThreadId, read_upload, respond
-from app.api.schemas import ContinueRequest, ReviewRequest, ScreeningResponse, ScreeningSummary
+from app.middleware.auth import Caller, ReadCaller, require_api_key
+from app.schemas.api_schemas import ContinueRequest, ReviewRequest, ScreeningResponse, ScreeningSummary
+from app.utils.deps import ServiceDep, Stream, ThreadId, read_upload, respond
 
 # The API key and the rate limits (the stricter workflow ones on every POST) are enforced by
 # ScreeningsGuardMiddleware, before the body is read. The key dependency repeats that check,

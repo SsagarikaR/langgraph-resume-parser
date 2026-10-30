@@ -54,18 +54,10 @@ jobs:
           python-version: "3.12"
       - run: pip install pip-audit==2.9.0
       - name: Known vulnerabilities in the locked Python dependencies
-        # --disable-pip: audit the lockfiles as written instead of re-resolving them. Accepted
-        # vulnerabilities (with their reasons) are listed once, in .trivyignore; expired ones count again.
-        # The lockfiles are --universal (one file for every supported Python), so a package pinned
-        # to different versions per Python version appears twice with mutually exclusive markers;
-        # pip-audit's static parser can't handle two lines for one name, so audit a copy filtered
-        # down to this job's own Python version instead (scripts/filter_requirements_for_audit.py).
-        # api/ui/dev are resolved independently (scripts/lock.sh), so a shared transitive dependency
-        # can legitimately land on a different pinned version in each file; pip-audit refuses a
-        # combined -r set with conflicting pins for the same package, so each file is audited on its own.
+        # Audits each lockfile (api/ui/dev) on its own, skipping vulnerabilities accepted in .trivyignore.
         run: |
           today=$(date +%F)
-          ignores=$(awk -v today="$today" '/^(CVE-|GHSA-)/ { split($2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $1 }' .trivyignore)
+          ignores=$(awk -v today="$today" '/^(CVE-|GHSA-|PYSEC-)/ { split($2, e, ":"); if (e[2] >= today) printf "--ignore-vuln %s ", $1 }' .trivyignore)
           for f in api ui dev; do
             python3 scripts/filter_requirements_for_audit.py requirements/$f.txt /tmp/audit-$f.txt
             pip-audit --require-hashes --disable-pip $ignores -r /tmp/audit-$f.txt

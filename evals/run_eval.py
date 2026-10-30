@@ -19,8 +19,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import cast
 
-from app.core.config import get_settings
-from app.core.logging import setup_logging
+from app.config.logging import setup_logging
+from app.config.settings import get_settings
 from app.graph.edges import route_after_matching
 from app.graph.matching import mentioned
 from app.graph.nodes import analyze_gaps, analyze_job, extract_resume, generate_questions, match_requirements

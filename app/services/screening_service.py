@@ -8,13 +8,9 @@ from pathlib import Path
 
 from langgraph.types import Command
 
-from app.core.config import get_settings
-from app.graph.exceptions import InvalidInputError
-from app.graph.graph import get_graph
-from app.graph.runner import WorkflowRunner
-from app.repositories.screening_repository import ScreeningRepository
-from app.services.concurrency import HeldRun, RunGuard
-from app.services.exceptions import (
+from app.config.settings import get_settings
+from app.exceptions.domain import (
+    InvalidInputError,
     InvalidScreeningInputError,
     NotAwaitingReviewError,
     NotPausedError,
@@ -22,6 +18,11 @@ from app.services.exceptions import (
     ScreeningNotFoundError,
     WorkflowFailedError,
 )
+from app.graph.graph import get_graph
+from app.graph.runner import WorkflowRunner
+from app.llms.llm_factory import set_budget_checker
+from app.repository.sql_repository.screening_repository import ScreeningRepository
+from app.services.concurrency import HeldRun, RunGuard
 from app.services.inputs import (
     BREAKPOINT_NODES,
     PDF_MAGIC,
@@ -75,6 +76,10 @@ class ScreeningService:
         self.workflow = workflow or WorkflowRunner()
         self.guard = RunGuard(get_settings().max_concurrent_runs)
         self.token_budget = TokenBudget(lambda: get_settings().daily_token_budget)
+        # Every LLM call, not just the one check at the start of a run, re-checks this budget: a
+        # run already in progress (e.g. several reviewer-revision rounds) must still stop calling
+        # the LLM once the daily ceiling is hit, not only get charged for it after the fact.
+        set_budget_checker(self.token_budget.check)
 
     # ---------------- public operations ----------------
     def start(

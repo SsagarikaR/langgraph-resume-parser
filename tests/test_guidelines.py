@@ -1,6 +1,10 @@
 from langchain_core.messages import AIMessage
 
+from app.config.settings import get_settings
 from app.tools import guidelines
+
+MAX_TOOL_ROUNDS = get_settings().guideline_max_tool_rounds
+MAX_TOOL_CALLS = get_settings().guideline_max_tool_calls
 
 
 class ScriptedLLM:
@@ -29,11 +33,11 @@ def test_tool_results_are_fed_back_and_the_summary_returned(monkeypatch):
 
 
 def test_round_limit_falls_back_to_raw_results(monkeypatch):
-    llm = ScriptedLLM([tool_call("Kafka", str(i)) for i in range(guidelines.MAX_TOOL_ROUNDS)])
+    llm = ScriptedLLM([tool_call("Kafka", str(i)) for i in range(MAX_TOOL_ROUNDS)])
     monkeypatch.setattr(guidelines, "get_tool_llm", lambda tools: llm)
     monkeypatch.setattr(guidelines.lookup_interview_guideline, "func", lambda topic: "found")
 
-    assert guidelines.gather_guidelines(["Kafka"]) == "\n\n".join(["found"] * guidelines.MAX_TOOL_ROUNDS)
+    assert guidelines.gather_guidelines(["Kafka"]) == "\n\n".join(["found"] * MAX_TOOL_ROUNDS)
 
 
 def test_unknown_tool_is_reported_to_the_model_not_raised(monkeypatch):
@@ -50,7 +54,7 @@ def test_searches_beyond_the_call_limit_are_not_run(monkeypatch):
         "",
         tool_calls=[
             {"name": "lookup_interview_guideline", "args": {"topic": f"t{i}"}, "id": str(i)}
-            for i in range(guidelines.MAX_TOOL_CALLS + 3)
+            for i in range(MAX_TOOL_CALLS + 3)
         ],
     )
     llm = ScriptedLLM([many, AIMessage("summary")])
@@ -59,7 +63,7 @@ def test_searches_beyond_the_call_limit_are_not_run(monkeypatch):
     monkeypatch.setattr(guidelines.lookup_interview_guideline, "func", lambda topic: searched.append(topic) or "found")
 
     assert guidelines.gather_guidelines(["x"]) == "summary"
-    assert len(searched) == guidelines.MAX_TOOL_CALLS
+    assert len(searched) == MAX_TOOL_CALLS
     answers = [m for m in llm.seen[1] if m.type == "tool"]
-    assert len(answers) == guidelines.MAX_TOOL_CALLS + 3  # every call still got a reply
+    assert len(answers) == MAX_TOOL_CALLS + 3  # every call still got a reply
     assert answers[-1].content.startswith(guidelines.TOOL_LIMIT_REACHED)

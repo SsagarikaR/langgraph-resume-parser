@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
     llm_timeout_seconds: float = 120.0
     llm_max_retries: int = 3
+    # Consecutive structured-call failures (after each call's own retries/fallback) before the
+    # circuit opens and fails fast; and how long it stays open before allowing a trial call.
+    llm_circuit_failure_threshold: int = Field(5, ge=1)
+    llm_circuit_cooldown_seconds: float = Field(30.0, gt=0)
 
     # ---- Vector store (local mode in qdrant_path unless qdrant_url is set) ----
     qdrant_url: str | None = None
@@ -57,6 +61,10 @@ class Settings(BaseSettings):
     # ---- Guideline search ----
     guideline_top_k: int = Field(4, gt=0)  # chunks returned per search
     guideline_min_score: float = Field(0.6, ge=0, le=1)  # cosine similarity cut-off
+    guideline_relative_margin: float = Field(0.15, ge=0, le=1)  # drop hits this far below the best match
+    guideline_rerank_vector_weight: float = Field(0.7, ge=0, le=1)  # weight on raw cosine score in the rerank blend
+    guideline_max_tool_rounds: int = Field(5, gt=0)  # safety limit on gather_guidelines tool-call loop iterations
+    guideline_max_tool_calls: int = Field(12, gt=0)  # safety limit on total lookup_interview_guideline calls
 
     # ---- Data retention (resumes are personal data) ----
     retention_days: int = Field(30, ge=0)  # erase screenings idle this long; 0 = keep forever
@@ -86,6 +94,7 @@ class Settings(BaseSettings):
     daily_token_budget: int = Field(5_000_000, ge=0)  # server-wide LLM token cap per 24 h; 0 = no limit
     max_concurrent_runs: int = Field(8, gt=0)  # max workflows running at once server-wide
     metrics_enabled: bool = True  # expose GET /metrics for Prometheus
+    otel_exporter_otlp_endpoint: str | None = None  # e.g. http://otel-collector:4318; unset disables tracing
 
     log_level: str = "INFO"
     log_format: Literal["text", "json"] = "text"  # json = structured logs for log collectors

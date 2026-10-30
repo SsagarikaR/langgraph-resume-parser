@@ -14,9 +14,9 @@ import getpass
 import sys
 from pathlib import Path
 
-from app.core.config import get_settings
-from app.core.logging import setup_logging
-from app.services.exceptions import ScreeningError
+from app.config.logging import setup_logging
+from app.config.settings import get_settings
+from app.exceptions.domain import ScreeningError
 from app.services.screening_service import ScreeningService, create_service
 
 

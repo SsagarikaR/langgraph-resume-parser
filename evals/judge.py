@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 
-from app.core import prompts
-from app.core.config import get_settings
-from app.core.llm import chat_model
+from app.config.settings import get_settings
+from app.llms import chat_model
+from app.prompts import screening_prompts as prompts
 
 JUDGE_PROMPT = (
     "You review interview questions an assistant wrote for screening a candidate. For every "

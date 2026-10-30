@@ -7,22 +7,23 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
-from app.api.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER, require_api_key
-from app.api.deps import get_service
-from app.api.errors import handle_screening_error
-from app.api.middleware import (
+from app.config.logging import setup_logging
+from app.config.settings import get_settings
+from app.exceptions.domain import ScreeningError
+from app.exceptions.handlers import handle_screening_error
+from app.middleware.auth import ACTING_USER_HEADER, API_KEY_HEADER, CLIENT_SESSION_HEADER, require_api_key
+from app.middleware.middleware import (
     REQUEST_ID_HEADER,
     BodySizeLimitMiddleware,
     ScreeningsGuardMiddleware,
     add_security_headers,
     track_request,
 )
-from app.api.routes.health import router as health_router
-from app.api.routes.screenings import router as screenings_router
-from app.core.config import get_settings
-from app.core.logging import setup_logging
-from app.core.metrics import metrics
-from app.services.exceptions import ScreeningError
+from app.observability.metrics import metrics
+from app.observability.tracing import setup_tracing
+from app.routes.health_routes import router as health_router
+from app.routes.screening_routes import router as screenings_router
+from app.utils.deps import get_service
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if docs else None,
         openapi_url="/openapi.json" if docs else None,
     )
+    setup_tracing(app, settings.otel_exporter_otlp_endpoint)
     api_prefix = settings.api_prefix
     app.include_router(health_router)
     app.include_router(screenings_router, prefix=api_prefix)

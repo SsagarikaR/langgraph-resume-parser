@@ -10,8 +10,8 @@ import threading
 from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 
-from app.core.metrics import metrics
-from app.services.exceptions import ScreeningBusyError, ServerBusyError
+from app.exceptions.domain import ScreeningBusyError, ServerBusyError
+from app.observability.metrics import metrics
 
 logger = logging.getLogger(__name__)
 

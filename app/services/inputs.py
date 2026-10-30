@@ -4,8 +4,8 @@ thread ids and the reviewer's skill correction. Each raises InvalidScreeningInpu
 import io
 import re
 
-from app.core.config import get_settings
-from app.services.exceptions import InvalidScreeningInputError
+from app.config.settings import get_settings
+from app.exceptions.domain import InvalidScreeningInputError
 from app.utils.pdf import UnreadablePdfError, extract_text_from_pdf
 
 # Nodes a run may pause after (static breakpoints, i.e. LangGraph's interrupt_after)

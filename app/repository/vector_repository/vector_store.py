@@ -18,9 +18,9 @@ from pathlib import Path
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointIdsList, PointStruct, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointIdsList, PointStruct, VectorParams
 
-from app.core.config import BASE_DIR, get_settings
+from app.config.settings import BASE_DIR, get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ COLLECTION = "interview_guidelines"
 # (not caught by the vector-size check alone) still triggers a rebuild instead of leaving stale,
 # semantically mismatched vectors in place indefinitely.
 _MODEL_MARKER_PATH = BASE_DIR / ".qdrant_embedding_model"
-# Coordinates `ingest()` (can run as a separate `python -m app.knowledge.ingest` process) with
+# Coordinates `ingest()` (can run as a separate `python -m app.repository.vector_repository.ingest` process) with
 # `search()`/`ensure_index()` in the API process, so a search never reads mid-rebuild.
 _LOCK_PATH = BASE_DIR / ".qdrant_ingest.lock"
 
@@ -177,13 +177,85 @@ def _embed_query_cached(query: str) -> tuple[float, ...]:
     return tuple(get_embeddings().embed_query(query))
 
 
-def search(query: str) -> list[dict]:
-    """Closest guideline chunks to `query`, using the configured count and score cut-off."""
+def _tokenize(text: str) -> set[str]:
+    return {tok for tok in text.lower().split() if len(tok) > 2}
+
+
+def _lexical_overlap(query_tokens: set[str], text: str) -> float:
+    """Fraction of query tokens that literally appear in the chunk's text.
+
+    Vector similarity alone can rank a chunk that is merely topic-adjacent above one that
+    actually names the queried skill/term (e.g. "Kafka" vs. a generic "event streams" chunk),
+    because embeddings blur exact-term matches into broader semantic neighborhoods. Blending in
+    a literal overlap signal rewards chunks that actually mention what was searched for.
+    """
+    if not query_tokens:
+        return 0.0
+    return len(query_tokens & _tokenize(text)) / len(query_tokens)
+
+
+def _rerank(query: str, hits: list[dict]) -> list[dict]:
+    """Re-score vector hits with a vector/lexical blend and re-sort by the blended score.
+
+    `score` is kept as the raw cosine similarity (used for the absolute cut-off upstream);
+    the blended value only decides final ordering and the relative-margin cut-off, so a
+    lexically-matching chunk that's a near-tie on vector score can win the top slot.
+
+    The vector/lexical split is `guideline_rerank_vector_weight` (config, not a hardcoded
+    constant), so it can be tuned per deployment/eval run without a code change.
+    """
+    vector_weight = get_settings().guideline_rerank_vector_weight
+    query_tokens = _tokenize(query)
+    reranked = [
+        {
+            **h,
+            "rerank_score": vector_weight * h["score"]
+            + (1 - vector_weight) * _lexical_overlap(query_tokens, h.get("text", "")),
+        }
+        for h in hits
+    ]
+    reranked.sort(key=lambda h: h["rerank_score"], reverse=True)
+    return reranked
+
+
+def _metadata_filter(kind: str | None, source: str | None) -> Filter | None:
+    """Qdrant payload filter restricting a search to one guideline `kind` (e.g. "Red flag") and/or
+    one source file, instead of always scanning the whole collection."""
+    conditions = []
+    if kind is not None:
+        conditions.append(FieldCondition(key="kind", match=MatchValue(value=kind)))
+    if source is not None:
+        conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
+    return Filter(must=conditions) if conditions else None
+
+
+def search(query: str, *, kind: str | None = None, source: str | None = None) -> list[dict]:
+    """Closest guideline chunks to `query`, using the configured count and score cut-off.
+
+    `kind`/`source` narrow the search to a payload subset (e.g. only "Red flag" chunks, or only
+    one guideline file) via a Qdrant payload filter, instead of always searching every chunk.
+
+    Besides the absolute `guideline_min_score` cut-off, a hit is also dropped if it trails the
+    best match for this query by more than `guideline_relative_margin`: once one chunk is clearly
+    the best answer, a merely-passable tail hit only dilutes the summary the LLM is asked to write.
+    Hits are reranked with a vector/lexical blend (see `_rerank`) before that margin is applied,
+    so the margin is measured against the best *reranked* match, not just the best raw embedding.
+    """
     settings = get_settings()
     ensure_index()
     vector = list(_embed_query_cached(query))
+    query_filter = _metadata_filter(kind, source)
     with _file_lock(exclusive=False):
         result = get_client().query_points(
-            COLLECTION, query=vector, limit=settings.guideline_top_k, score_threshold=settings.guideline_min_score
+            COLLECTION,
+            query=vector,
+            query_filter=query_filter,
+            limit=settings.guideline_top_k,
+            score_threshold=settings.guideline_min_score,
         )
-    return [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
+    hits = [{**(hit.payload or {}), "score": round(hit.score, 3)} for hit in result.points]
+    if not hits:
+        return hits
+    hits = _rerank(query, hits)
+    best = hits[0]["rerank_score"]
+    return [h for h in hits if h["rerank_score"] >= best - settings.guideline_relative_margin]

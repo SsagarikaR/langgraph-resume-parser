@@ -22,6 +22,9 @@ dependencies = [
     "uvicorn~=0.54.0",
     "python-multipart~=0.0.32",
     "qdrant-client~=1.19.1",
+    "opentelemetry-sdk>=1.44,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
+    "opentelemetry-instrumentation-fastapi>=0.65b0,<1",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +45,7 @@ dev = [
 
 [project.scripts]
 resume-screener = "app.cli:main"
-resume-screener-ingest = "app.knowledge.ingest:main"
+resume-screener-ingest = "app.repository.vector_repository.ingest:main"
 
 [tool.setuptools.packages.find]
 include = ["app*", "ui*"]
