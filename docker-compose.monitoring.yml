@@ -7,8 +7,6 @@ services:
     read_only: true
     tmpfs: [/prometheus-secrets]
     entrypoint: ["/bin/sh", "-c"]
-    # Picks a scrape key: the single API_KEY if set, else the first plaintext entry in API_KEYS
-    # (a sha256:-hashed entry has no usable plaintext, so those are skipped).
     command:
       - |
         key="$$API_KEY"
@@ -29,7 +27,6 @@ services:
         umask 077 && printf '%s' "$$key" > /prometheus-secrets/api_key &&
         exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus --storage.tsdb.retention.time=30d
     environment:
-      # Same keys as the api/ui services use; at least one must resolve to a usable plaintext key
       API_KEY: ${API_KEY:-}
       API_KEYS: ${API_KEYS:-}
     volumes:
