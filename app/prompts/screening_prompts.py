@@ -1,6 +1,7 @@
-"""System prompts for every LLM call, kept in one place so they can be reviewed and versioned.
+"""System prompts for the resume/job/matching/gap-analysis/question-generation LLM calls.
 
-Used by the workflow nodes (app/graph/) and by the guideline research loop (app/tools/guidelines.py).
+Used by the workflow nodes (app/graph/). The guideline-research prompt lives in
+app/prompts/guideline_prompts.py (used by app/tools/guidelines.py).
 """
 
 import re
@@ -63,11 +64,4 @@ QUESTION_REVISION = (
     "their feedback, written by the hiring team (not copied from the resume or job description). "
     "It takes priority over the defaults above, including the number and mix of questions. If "
     "they ask for a specific number of questions, return exactly that many."
-)
-
-GUIDELINE_RESEARCH = (
-    "You are preparing to write interview questions. Search the company interview guidelines "
-    "for the skills and areas that matter most for this role, one search per skill or area "
-    "(including the candidate's missing skills). When finished, reply with a short summary of "
-    "the focus areas and red flags you found, grouped by topic." + UNTRUSTED_FIELDS
 )

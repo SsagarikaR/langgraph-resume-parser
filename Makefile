@@ -16,7 +16,7 @@ install: ## Create venv and install all dependencies
 	$(PYTHON) -m pre_commit install
 
 dev: ## Start the API server locally (hot-reload)
-	@set -a; [ -f .env ] && . ./.env; set +a; $(PYTHON) -m uvicorn app.api.main:app --reload
+	@set -a; [ -f .env ] && . ./.env; set +a; $(PYTHON) -m uvicorn app.main:app --reload
 
 ui: ## Start the Streamlit UI locally (reads .env.ui.local if it exists)
 	@set -a; [ -f .env.ui.local ] && . ./.env.ui.local; set +a; $(PYTHON) -m streamlit run ui/streamlit_app.py

@@ -17,10 +17,10 @@ from fastapi import HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.api.auth import ACTING_USER_HEADER, API_KEY_HEADER, check_acting_user, check_api_key, check_permission
-from app.api.rate_limit import api_rate_limit, budgets_for, workflow_rate_limit
-from app.core.logging import request_id
-from app.core.metrics import metrics
+from app.config.logging import request_id
+from app.middleware.auth import ACTING_USER_HEADER, API_KEY_HEADER, check_acting_user, check_api_key, check_permission
+from app.middleware.rate_limit import api_rate_limit, budgets_for, workflow_rate_limit
+from app.observability.metrics import metrics
 
 logger = logging.getLogger(__name__)
 

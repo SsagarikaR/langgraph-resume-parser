@@ -1,14 +1,9 @@
-# Every service runs hardened: no Linux capabilities beyond what it needs, no privilege gain via
-# setuid binaries, and (where the app allows) a read-only root filesystem with writable state only
-# in volumes and /tmp.
 x-hardening: &hardening
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
   restart: unless-stopped
 
 services:
-  # The only service published on the host: HTTPS for the UI (/) and the API (/api/). The API key,
-  # UI passwords and resume data never cross the network in plain text. See deploy/Caddyfile.
   proxy:
     <<: *hardening
     image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
@@ -47,21 +42,15 @@ services:
     tmpfs: [/tmp] # uploads are spooled here while a request is parsed
     env_file: .env
     environment:
-      # .env also holds the UI's secrets: blank them, so the API process never has the UI's logins
       UI_USERS: ""
       UI_PASSWORD: ""
-      # These override .env, which may hold host paths (e.g. CHECKPOINT_DB=checkpoints.db from
-      # .env.example) that the non-root user cannot write inside the image. State goes in the volume.
       QDRANT_URL: http://qdrant:6333 # the Qdrant service instead of local file mode
       QDRANT_API_KEY: ${QDRANT_API_KEY:?Set QDRANT_API_KEY in .env (see .env.example)}
       CHECKPOINT_DB: /var/lib/screener/checkpoints.db
       REPORTS_DIR: /var/lib/screener/reports
       UPLOADS_DIR: /var/lib/screener/uploads
       QDRANT_PATH: /var/lib/screener/qdrant_data
-      # The stack is reachable from the network, so it never runs without authentication
       API_KEY: ${API_KEY:?Set API_KEY in .env (see .env.example)}
-      # uvicorn takes the client address from X-Forwarded-For only on requests from the proxy, so
-      # rate limits and logs see each real client and no other container can claim another address
       FORWARDED_ALLOW_IPS: ${PROXY_IP:-172.30.240.10}
     expose:
       - "8000"

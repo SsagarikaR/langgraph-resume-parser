@@ -8,22 +8,23 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app.core import prompts
-from app.core.config import get_settings
-from app.core.prompts import as_document
-from app.graph import nodes
-from app.graph.graph import get_graph
-from app.repositories.screening_repository import ScreeningRepository
-from app.schemas.analysis import GapAnalysis, InterviewQuestion, InterviewQuestionSet
-from app.schemas.job import JobRequirements
-from app.schemas.resume import Experience, Project, ResumeProfile
-from app.services.exceptions import (
+from app.config.settings import get_settings
+from app.exceptions.domain import (
     InvalidScreeningInputError,
     NotPausedError,
     ScreeningNotFoundError,
     ServerBusyError,
     WorkflowFailedError,
 )
+from app.graph import nodes
+from app.graph.graph import get_graph
+from app.prompts import guideline_prompts
+from app.prompts import screening_prompts as prompts
+from app.prompts.screening_prompts import as_document
+from app.repository.sql_repository.screening_repository import ScreeningRepository
+from app.schemas.analysis import GapAnalysis, InterviewQuestion, InterviewQuestionSet
+from app.schemas.job import JobRequirements
+from app.schemas.resume import Experience, Project, ResumeProfile
 from app.services.screening_service import ScreeningService
 
 PDF = b"%PDF-1.7 fake"
@@ -341,7 +342,7 @@ def test_documents_are_framed_as_untrusted_data(tag):
 
 def test_prompts_fed_from_uploaded_text_treat_it_as_data():
     # Gap analysis, guideline research and questions get JSON built from the resume and JD
-    for prompt in (prompts.GAP_ANALYSIS, prompts.GUIDELINE_RESEARCH, prompts.QUESTION_GENERATION):
+    for prompt in (prompts.GAP_ANALYSIS, guideline_prompts.GUIDELINE_RESEARCH, prompts.QUESTION_GENERATION):
         assert prompts.UNTRUSTED_FIELDS in prompt
 
 

@@ -6,7 +6,7 @@ from typing import cast
 
 import streamlit as st
 
-from ui.api_client import API_URL, api, api_is_up, md, run_with_progress
+from ui.api_client import api, api_is_up, md, run_with_progress
 from ui.login import LOGIN_REQUIRED, require_login, sign_out
 
 BREAKPOINT_NODES = ["match_requirements", "analyze_gaps", "generate_questions"]
@@ -28,10 +28,9 @@ def reload(thread_id: str) -> None:
 with st.sidebar:
     st.header("Resume Screening")
     if api_is_up():
-        st.success(f"API connected: {API_URL}")
+        st.success("API connected")
     else:
-        st.error(f"API not reachable: {API_URL}")
-        st.caption("Start it with: `uvicorn app.api:app --reload`")
+        st.error("API not reachable")
     if not LOGIN_REQUIRED:
         st.caption("⚠️ UI_USERS / UI_PASSWORD is not set: anyone who can open this page can use it.")
     elif USER:

@@ -4,7 +4,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 
-from app.services.exceptions import BudgetExceededError
+from app.exceptions.domain import BudgetExceededError
 
 DAY_SECONDS = 24 * 60 * 60.0
 

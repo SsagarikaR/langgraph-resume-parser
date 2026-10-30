@@ -1,6 +1,6 @@
 """Rebuild the Qdrant index after editing data/knowledge_base/*.md:
 
-    python -m app.knowledge.ingest
+    python -m app.repository.vector_repository.ingest
 
 A file lock (see vector_store._file_lock) keeps this from racing a concurrent search in the API
 process, but in local mode only one process can open ./qdrant_data at all, so stop the API server
@@ -14,9 +14,9 @@ editable by end users or synced from an external source (e.g. a wiki), treat its
 untrusted input in the prompt, the same as resume/JD text.
 """
 
-from app.core.config import get_settings
-from app.core.logging import setup_logging
-from app.knowledge.vector_store import COLLECTION, ingest
+from app.config.logging import setup_logging
+from app.config.settings import get_settings
+from app.repository.vector_repository.vector_store import COLLECTION, ingest
 
 
 def main() -> None:

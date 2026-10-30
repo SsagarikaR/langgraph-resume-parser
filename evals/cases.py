@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.core.config import BASE_DIR
+from app.config.settings import BASE_DIR
 from app.graph.matching import month_index, role_months
 
 CASES_DIR = Path(__file__).parent / "cases"

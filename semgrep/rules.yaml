@@ -4,13 +4,13 @@
 rules:
   - id: env-read-outside-settings
     message: >-
-      Read configuration through get_settings() (app/core/config.py), not the environment, so every
+      Read configuration through get_settings() (app/config/settings.py), not the environment, so every
       tunable is validated and documented in one place.
     severity: ERROR
     languages: [python]
     paths:
       include: ["/app/"]
-      exclude: ["/app/core/config.py"]
+      exclude: ["/app/config/settings.py"]
     pattern-either:
       - pattern: os.getenv(...)
       - pattern: os.environ
@@ -18,13 +18,14 @@ rules:
 
   - id: llm-outside-factory
     message: >-
-      Create chat models in app/core/llm.py (chat_model, get_structured_llm, get_tool_llm): that is
-      where the key, timeout, retries and fallback model are applied.
+      Create chat models in app/llms/llm_factory.py or app/llms/gemini_chat_client.py (chat_model,
+      get_structured_llm, get_tool_llm): that is where the key, timeout, retries and fallback model
+      are applied.
     severity: ERROR
     languages: [python]
     paths:
       include: ["/app/", "/evals/"]
-      exclude: ["/app/core/llm.py"]
+      exclude: ["/app/llms/llm_factory.py", "/app/llms/gemini_chat_client.py"]
     pattern-either:
       - pattern: init_chat_model(...)
       - pattern: langchain.chat_models.init_chat_model(...)

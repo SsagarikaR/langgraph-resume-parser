@@ -6,8 +6,8 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Response
 
-from app.api.deps import get_service
-from app.knowledge import vector_store
+from app.repository.vector_repository import vector_store
+from app.utils.deps import get_service
 
 logger = logging.getLogger(__name__)
 

@@ -30,8 +30,8 @@ from dataclasses import dataclass
 
 from fastapi import HTTPException, Request, status
 
-from app.api.auth import ACTING_USER_HEADER, CLIENT_SESSION_HEADER, caller_name
-from app.core.config import get_settings
+from app.config.settings import get_settings
+from app.middleware.auth import ACTING_USER_HEADER, CLIENT_SESSION_HEADER, caller_name
 
 MINUTE = 60.0
 DAY = 24 * 60 * 60.0

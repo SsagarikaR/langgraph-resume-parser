@@ -94,14 +94,23 @@ datasource). See the README's Monitoring section for ports and access.
 
 Alerts already defined (`deploy/prometheus/alerts.yml`): the API unreachable; a high 5xx share;
 repeated failed screening runs; run slots saturated at `MAX_CONCURRENT_RUNS` for 10 minutes; the
-daily token budget (`DAILY_TOKEN_BUDGET`) 80% spent. None of them notify anyone yet — add an
-Alertmanager service with a receiver (email, Slack, PagerDuty) for that.
+daily token budget (`DAILY_TOKEN_BUDGET`) 80% spent. Prometheus routes them to an Alertmanager
+service (also started by `docker-compose.monitoring.yml`), which notifies `ALERTMANAGER_WEBHOOK_URL`
+(any Slack/Teams/PagerDuty incoming-webhook URL); critical alerts (`ApiDown`) repeat hourly, warnings
+every 4 hours. Set that variable in `.env` or the alerts stay firing with nowhere to go.
+
+### Tracing
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. `http://otel-collector:4318`) to export one span per HTTP
+request — via `app/observability/tracing.py` — to an OTLP collector feeding Jaeger/Tempo/etc. Unset
+by default so local dev and CI never try to reach a collector. This is independent of the optional
+LangSmith tracing (`LANGSMITH_TRACING`), which traces inside the LangGraph workflow itself.
 
 ## Secrets
 
 In production, prefer a cloud secrets manager over `.env` on the host: `scripts/fetch_secrets.sh`
 fetches from AWS Secrets Manager, GCP Secret Manager or HashiCorp Vault and writes each one to
-`/run/secrets/<setting_name>`, which `app/core/config.py` already reads ahead of the environment.
+`/run/secrets/<setting_name>`, which `app/config/settings.py` already reads ahead of the environment.
 Run it before the container starts (a host step, an init container, or a systemd `ExecStartPre`),
 then mount that directory read-only into the container in place of (or alongside) `env_file: .env`.
 Rotate by fetching the new value and restarting the API; nothing caches the old one past that.

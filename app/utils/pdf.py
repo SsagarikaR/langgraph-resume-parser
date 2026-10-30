@@ -15,7 +15,7 @@ from typing import BinaryIO
 from pypdf import PdfReader
 from pypdf.errors import PyPdfError
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 
 # Resumes and JDs are a few pages; a cap stops a crafted many-page PDF from tying up a worker
 MAX_PAGES = 50

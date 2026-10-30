@@ -1,6 +1,6 @@
 from typing import Literal
 
-from app.core.config import get_settings
+from app.config.settings import get_settings
 from app.graph.state import ResumeState
 
 

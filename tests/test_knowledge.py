@@ -1,7 +1,7 @@
 from qdrant_client import QdrantClient
 
-from app.knowledge import vector_store
-from app.knowledge.vector_store import chunk_markdown
+from app.repository.vector_repository import vector_store
+from app.repository.vector_repository.vector_store import chunk_markdown
 from app.tools import knowledge_tools
 
 
@@ -81,7 +81,7 @@ def test_search_builds_the_index_on_first_use_and_applies_the_cut_off(tmp_path, 
 
 
 def test_ingest_command_reports_the_count(monkeypatch, capsys):
-    from app.knowledge import ingest
+    from app.repository.vector_repository import ingest
 
     monkeypatch.setattr(ingest, "ingest", lambda: 7)
     ingest.main()

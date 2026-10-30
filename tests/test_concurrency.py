@@ -1,7 +1,7 @@
 import pytest
 
+from app.exceptions.domain import ScreeningBusyError, ServerBusyError
 from app.services.concurrency import HeldRun, RunGuard
-from app.services.exceptions import ScreeningBusyError, ServerBusyError
 
 
 def test_a_screening_is_held_by_one_request_at_a_time():
