@@ -26,16 +26,15 @@ case "$header" in
   *) echo "Refusing to restore $backup: not a SQLite database" >&2; exit 1 ;;
 esac
 
-docker compose cp "$plain" api:/tmp/restore.db
 docker compose exec -T api python -c "
-import shutil, os
-shutil.copyfile('/tmp/restore.db', '/var/lib/screener/checkpoints.db')
+import sys, os
+with open('/var/lib/screener/checkpoints.db', 'wb') as f:
+    f.write(sys.stdin.buffer.read())
 os.chmod('/var/lib/screener/checkpoints.db', 0o600)
-os.remove('/tmp/restore.db')
 for wal in ('/var/lib/screener/checkpoints.db-wal', '/var/lib/screener/checkpoints.db-shm'):
     if os.path.exists(wal):
         os.remove(wal)
-"
+" < "$plain"
 docker compose restart api
 
 for _ in $(seq 30); do

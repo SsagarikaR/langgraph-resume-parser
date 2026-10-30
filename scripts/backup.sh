@@ -18,15 +18,16 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 docker compose exec -T api python -c "
-import sqlite3
+import sqlite3, sys, os
 src = sqlite3.connect('/var/lib/screener/checkpoints.db')
-dst = sqlite3.connect('/tmp/backup-$timestamp.db')
+dst = sqlite3.connect('/tmp/backup.db')
 src.backup(dst)
 dst.close()
 src.close()
-"
-docker compose cp "api:/tmp/backup-$timestamp.db" "$tmp/checkpoints-$timestamp.db"
-docker compose exec -T api rm -f "/tmp/backup-$timestamp.db"
+with open('/tmp/backup.db', 'rb') as f:
+    sys.stdout.buffer.write(f.read())
+os.remove('/tmp/backup.db')
+" > "$tmp/checkpoints-$timestamp.db"
 
 if [ -n "${BACKUP_AGE_RECIPIENT:-}" ]; then
   age -r "$BACKUP_AGE_RECIPIENT" -o "$dest/checkpoints-$timestamp.db.age" "$tmp/checkpoints-$timestamp.db"
